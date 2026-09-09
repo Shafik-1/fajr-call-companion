@@ -127,6 +127,7 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class Screen { HOME, CONTACT_PICKER, SETTINGS }
+enum class AppLanguage { EN, AR }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,6 +143,9 @@ fun AppNavigation(
     var selectedContacts by remember { mutableStateOf(loadSavedSelectedContacts(prefs)) }
     var ringDuration by remember { mutableIntStateOf(prefs.getInt("ring_duration", 25)) }
     var delayBetween by remember { mutableIntStateOf(prefs.getInt("delay_between", 5)) }
+    var currentLanguage by remember {
+        mutableStateOf(if (prefs.getString("app_lang", "EN") == "AR") AppLanguage.AR else AppLanguage.EN)
+    }
 
     var statusMessage by remember { mutableStateOf(FajrCallService.currentStatusMessage) }
     var activeIndex by remember { mutableIntStateOf(servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)) }
@@ -167,6 +171,7 @@ fun AppNavigation(
             stoppedIndex = activeIndex,
             remainingSec = remainingSec,
             isPausePhase = isPause,
+            lang = currentLanguage,
             onOpenContacts = { currentScreen = Screen.CONTACT_PICKER },
             onOpenSettings = { currentScreen = Screen.SETTINGS },
             onStart = {
@@ -180,13 +185,14 @@ fun AppNavigation(
             },
             onStop = {
                 onStopCalls()
-                statusMessage = "Stopped by user"
+                statusMessage = if (currentLanguage == AppLanguage.AR) "تم الإيقاف بواسطة المستخدم" else "Stopped by user"
                 remainingSec = 0
             }
         )
 
         Screen.CONTACT_PICKER -> ContactPickerScreen(
             alreadySelected = selectedContacts,
+            lang = currentLanguage,
             onBack = { currentScreen = Screen.HOME },
             onSaveSelection = { newSelection ->
                 selectedContacts = newSelection
@@ -198,18 +204,25 @@ fun AppNavigation(
         Screen.SETTINGS -> SettingsScreen(
             initialRingDuration = ringDuration,
             initialDelayBetween = delayBetween,
+            initialLanguage = currentLanguage,
             selectedContacts = selectedContacts,
             onBack = { currentScreen = Screen.HOME },
-            onSaveSettings = { newRing, newDelay ->
+            onSaveSettings = { newRing, newDelay, newLang ->
                 ringDuration = newRing
                 delayBetween = newDelay
-                prefs.edit().putInt("ring_duration", newRing).putInt("delay_between", newDelay).apply()
+                currentLanguage = newLang
+                prefs.edit()
+                    .putInt("ring_duration", newRing)
+                    .putInt("delay_between", newDelay)
+                    .putString("app_lang", if (newLang == AppLanguage.AR) "AR" else "EN")
+                    .apply()
                 currentScreen = Screen.HOME
             },
             onImportContacts = { importedList ->
                 selectedContacts = importedList
                 saveSelectedContacts(prefs, importedList)
-                Toast.makeText(context, "Imported ${importedList.size} contacts!", Toast.LENGTH_SHORT).show()
+                val msg = if (currentLanguage == AppLanguage.AR) "تم استيراد ${importedList.size} جهة اتصال!" else "Imported ${importedList.size} contacts!"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -222,6 +235,7 @@ fun FajrHomeScreen(
     stoppedIndex: Int,
     remainingSec: Int,
     isPausePhase: Boolean,
+    lang: AppLanguage,
     onOpenContacts: () -> Unit,
     onOpenSettings: () -> Unit,
     onStart: () -> Unit,
@@ -230,6 +244,7 @@ fun FajrHomeScreen(
 ) {
     val selectedCount = selectedContacts.size
     val nextContact = selectedContacts.getOrNull(stoppedIndex)
+    val isAr = lang == AppLanguage.AR
 
     Column(
         modifier = Modifier
@@ -248,7 +263,7 @@ fun FajrHomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Fajr Call Companion",
+                text = if (isAr) "مساعد صلاة الفجر" else "Fajr Call Companion",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1E293B)
@@ -342,13 +357,13 @@ fun FajrHomeScreen(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "CHOOSE LIST",
+                        text = if (isAr) "اختر القائمة" else "CHOOSE LIST",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "$selectedCount friends saved",
+                        text = if (isAr) "تم حفظ $selectedCount من الأصدقاء" else "$selectedCount friends saved",
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.95f)
                     )
@@ -367,7 +382,10 @@ fun FajrHomeScreen(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (stoppedIndex > 0) "RESUME CALLS (#${stoppedIndex + 1})" else "START FAJR CALLS",
+                    text = if (stoppedIndex > 0)
+                        (if (isAr) "استئناف المكالمات (#${stoppedIndex + 1})" else "RESUME CALLS (#${stoppedIndex + 1})")
+                    else
+                        (if (isAr) "ابدأ مكالمات الفجر" else "START FAJR CALLS"),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White
@@ -375,7 +393,8 @@ fun FajrHomeScreen(
                 if (nextContact != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Next call: ${nextContact.name} (${nextContact.phoneNumber})",
+                        text = if (isAr) "المكالمة التالية: ${nextContact.name} (${nextContact.phoneNumber})"
+                               else "Next call: ${nextContact.name} (${nextContact.phoneNumber})",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White.copy(alpha = 0.92f)
@@ -401,7 +420,7 @@ fun FajrHomeScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Refresh, contentDescription = "Restart", modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Restart #1", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(if (isAr) "إعادة #1" else "Restart #1", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -415,7 +434,7 @@ fun FajrHomeScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626), contentColor = Color.White)
             ) {
                 Text(
-                    text = "STOP CALLS",
+                    text = if (isAr) "إيقاف المكالمات" else "STOP CALLS",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -431,10 +450,12 @@ fun FajrHomeScreen(
 @Composable
 fun ContactPickerScreen(
     alreadySelected: List<ContactItem>,
+    lang: AppLanguage,
     onBack: () -> Unit,
     onSaveSelection: (List<ContactItem>) -> Unit
 ) {
     val context = LocalContext.current
+    val isAr = lang == AppLanguage.AR
     var allContacts by remember { mutableStateOf(listOf<ContactItem>()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedIds by remember {
@@ -460,7 +481,7 @@ fun ContactPickerScreen(
         containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Choose Friends (${selectedIds.size})", color = Color(0xFF0F172A), fontSize = 18.sp) },
+                title = { Text(if (isAr) "اختر الأصدقاء (${selectedIds.size})" else "Choose Friends (${selectedIds.size})", color = Color(0xFF0F172A), fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -472,7 +493,7 @@ fun ContactPickerScreen(
                         val selectedList = allContacts.filter { selectedIds.contains(it.phoneNumber) }
                         onSaveSelection(selectedList)
                     }) {
-                        Text("DONE", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        Text(if (isAr) "تم" else "DONE", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                     }
                 }
             )
@@ -491,7 +512,7 @@ fun ContactPickerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                placeholder = { Text("Search by name or number...", color = Color(0xFF94A3B8)) },
+                placeholder = { Text(if (isAr) "ابحث بالإسم أو الرقم..." else "Search by name or number...", color = Color(0xFF94A3B8)) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B))
                 },
@@ -528,7 +549,7 @@ fun ContactPickerScreen(
                     },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
                 ) {
-                    Text("Select All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(if (isAr) "تحديد الكل" else "Select All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 OutlinedButton(
                     onClick = {
@@ -537,7 +558,7 @@ fun ContactPickerScreen(
                     },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
                 ) {
-                    Text("Deselect All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(if (isAr) "إلغاء تحديد الكل" else "Deselect All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
 
@@ -604,14 +625,17 @@ fun ContactPickerScreen(
 fun SettingsScreen(
     initialRingDuration: Int,
     initialDelayBetween: Int,
+    initialLanguage: AppLanguage,
     selectedContacts: List<ContactItem>,
     onBack: () -> Unit,
-    onSaveSettings: (Int, Int) -> Unit,
+    onSaveSettings: (Int, Int, AppLanguage) -> Unit,
     onImportContacts: (List<ContactItem>) -> Unit
 ) {
     val context = LocalContext.current
     var ringDuration by remember { mutableIntStateOf(initialRingDuration) }
     var delayBetween by remember { mutableIntStateOf(initialDelayBetween) }
+    var selectedLanguage by remember { mutableStateOf(initialLanguage) }
+    val isAr = selectedLanguage == AppLanguage.AR
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -630,7 +654,7 @@ fun SettingsScreen(
         containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Call Settings", color = Color(0xFF0F172A), fontSize = 18.sp) },
+                title = { Text(if (isAr) "إعدادات المكالمات" else "Call Settings", color = Color(0xFF0F172A), fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -638,7 +662,7 @@ fun SettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween) }) {
+                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween, selectedLanguage) }) {
                         Icon(Icons.Default.Check, contentDescription = "Save", tint = Color(0xFF16A34A))
                     }
                 }
@@ -652,6 +676,51 @@ fun SettingsScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            // Language Selection Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (isAr) "لغة التطبيق / App Language" else "App Language / لغة التطبيق",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { selectedLanguage = AppLanguage.EN },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedLanguage == AppLanguage.EN) Color(0xFF0284C7) else Color(0xFFE2E8F0),
+                                contentColor = if (selectedLanguage == AppLanguage.EN) Color.White else Color(0xFF475569)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("English", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Button(
+                            onClick = { selectedLanguage = AppLanguage.AR },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedLanguage == AppLanguage.AR) Color(0xFF0284C7) else Color(0xFFE2E8F0),
+                                contentColor = if (selectedLanguage == AppLanguage.AR) Color.White else Color(0xFF475569)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("العربية", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                    }
+                }
+            }
             // Ring Duration Config
             Card(
                 modifier = Modifier
