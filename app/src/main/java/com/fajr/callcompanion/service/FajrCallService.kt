@@ -122,20 +122,8 @@ class FajrCallService : Service() {
 
             if (isCallInProgress.get() && !isStoppedByUser) {
                 val noAnsText = "No answer from ${contact.name}. Hanging up..."
+                updateStatus(noAnsText, currentContactIndex, 0, false)
                 endCurrentCall()
-
-                isPausePhase = true
-                for (sec in delayBetweenCallsSeconds downTo 1) {
-                    if (isStoppedByUser) break
-                    remainingSeconds = sec
-                    updateStatus("Pause before next call (${sec}s)...", currentContactIndex, sec, true)
-                    delay(1000L)
-                }
-
-                if (!isStoppedByUser) {
-                    currentContactIndex++
-                    processNextCall()
-                }
             }
         }
     }
@@ -158,12 +146,27 @@ class FajrCallService : Service() {
     private fun endCurrentCall() {
         isCallInProgress.set(false)
         activeJob?.cancel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
-            try {
-                telecomManager.endCall()
-            } catch (e: Exception) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
+                    telecomManager.endCall()
+                    return
+                }
             }
+        } catch (e: Exception) {
+            // Fallback for custom ROMs / MIUI
+        }
+
+        try {
+            val telephonyClass = Class.forName(telephonyManager.javaClass.name)
+            val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
+            methodGetITelephony.isAccessible = true
+            val iTelephony = methodGetITelephony.invoke(telephonyManager)
+            val methodEndCall = iTelephony.javaClass.getDeclaredMethod("endCall")
+            methodEndCall.invoke(iTelephony)
+        } catch (e: Exception) {
+            // Log fallback fail
         }
     }
 
@@ -175,16 +178,19 @@ class FajrCallService : Service() {
                         val wasInCall = isCallInProgress.getAndSet(false)
                         if (!isStoppedByUser && (wasInCall || isRunning)) {
                             activeJob?.cancel()
+                            // Mark current contact as done by advancing index!
+                            currentContactIndex++
+                            saveLastStoppedIndex(currentContactIndex)
+
                             activeJob = serviceScope.launch {
                                 isPausePhase = true
                                 for (sec in delayBetweenCallsSeconds downTo 1) {
                                     if (isStoppedByUser) break
                                     remainingSeconds = sec
-                                    updateStatus("Call ended. Pause before next call (${sec}s)...", currentContactIndex, sec, true)
+                                    updateStatus("Call completed! Pause before next call (${sec}s)...", currentContactIndex, sec, true)
                                     delay(1000L)
                                 }
                                 if (!isStoppedByUser) {
-                                    currentContactIndex++
                                     processNextCall()
                                 }
                             }
