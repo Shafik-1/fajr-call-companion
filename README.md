@@ -103,3 +103,47 @@ adb -s 192.168.1.205:44999 install app-debug.apk
 # Launch MainActivity on device
 adb -s 192.168.1.205:44999 shell am start -n com.fajr.callcompanion/.MainActivity
 ```
+
+---
+
+## 🤖 AI Agent Handover & Tooling Documentation
+
+This codebase is maintained with the assistance of **Antigravity AI Agent**. This section documents the tools, access mechanisms, workflows, and automated procedures used by the AI agent to maintain, debug, and deploy this project.
+
+### 1. Agent Toolset & Capabilities
+
+| Tool Name | Type / Purpose | Usage & Context |
+| :--- | :--- | :--- |
+| `run_command` | Shell Execution | Executes Linux `bash` shell commands, `git` operations, `curl`, `adb`, and background task monitoring. |
+| `view_file` | File Inspection | Reads codebase files with exact line numbers and byte ranges (e.g. `MainActivity.kt`, `FajrCallService.kt`). |
+| `replace_file_content` | Code Editing | Performs precise single contiguous code modifications with target line boundaries and validation. |
+| `multi_replace_file_content` | Batch Code Editing | Performs non-contiguous multi-chunk edits across a single source file in one turn. |
+| `write_to_file` | File Creation | Creates new project files, scratch scripts, or documentation markdown files. |
+| `grep_search` | Code Search | Fast `ripgrep` search across the workspace for symbols, strings, and method references. |
+| `list_dir` | Directory Analysis | Lists project directories, folder trees, and build output contents. |
+| `schedule` | Timer / Async Watcher | Schedules one-shot background timers to monitor GitHub Actions build jobs without blocking execution. |
+
+### 2. Git & Version Control Operations
+
+The agent interacts directly with Git via shell invocations inside the local workspace repository directory (`/mnt/Dspace/gedo/project call`):
+
+- **Commit Verification**: Evaluates syntax and code structure before making git commits.
+- **Atomic Commits**: Stages target files with `git add` and commits with structured, descriptive commit messages.
+- **Remote Synchronization**: Pushes clean commits directly to `origin main` using `git push origin main`.
+- **Clean History Maintenance**: In case of CI build failures, performs `git reset --hard <commit-sha>` or `git revert` followed by `git push origin main --force` to prevent commit clutter.
+
+### 3. CI/CD & Build Monitoring Workflow
+
+- **GitHub Actions Integration**: Pushes trigger automated cloud builds defined in `.github/workflows/build.yml`.
+- **Status Checking**: Polls the GitHub REST API (`https://api.github.com/repos/Shafik-1/fajr-call-companion/actions/runs`) to monitor build states (`queued` -> `in_progress` -> `completed` / `success`).
+- **Artifact Pipeline**: Uses `nightly.link` (`https://nightly.link/Shafik-1/fajr-call-companion/workflows/build.yml/main/FajrCallCompanion-APK.zip`) to fetch compiled APK artifacts automatically.
+
+### 4. Wireless ADB Testing & UI Verification
+
+- **Device Connection**: Maintains an active wireless ADB bridge to the test device at `192.168.1.205:44999`.
+- **Streamed Installation**: Automates APK uninstallation and installation via `adb -s 192.168.1.205:44999 install -g app-debug.apk`.
+- **Automated UI Testing & Screenshots**:
+  - Launches activities: `adb shell am start -n com.fajr.callcompanion/.MainActivity`.
+  - Simulates touch events: `adb shell input tap <x> <y>`.
+  - Captures and inspects UI state visually: `adb shell screencap -p /sdcard/screen.png`.
+  - Logs runtime diagnostic traces: `adb logcat -d -s FajrCall:V FajrInCall:V FajrInterceptor:V`.
