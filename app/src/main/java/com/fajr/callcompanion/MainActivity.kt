@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -1094,7 +1093,8 @@ fun QueueManagementScreen(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(currentQueue) { index, contact ->
+                items(currentQueue.size) { index ->
+                    val contact = currentQueue[index]
                     val isDone = isRunning && index < activeIndex
                     val isActive = isRunning && index == activeIndex
 
