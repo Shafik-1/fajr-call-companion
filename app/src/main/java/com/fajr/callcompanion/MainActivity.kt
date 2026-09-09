@@ -45,13 +45,28 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            MaterialTheme {
-                AppNavigation(
-                    onStartCalls = { selectedList, ringTime, delayTime ->
-                        startFajrCalls(selectedList, ringTime, delayTime)
-                    },
-                    onStopCalls = { stopFajrCalls() }
-                )
+            // Force light color palette so text is dark on light backgrounds regardless of System Dark Mode
+            val customColorScheme = lightColorScheme(
+                primary = Color(0xFF0284C7),
+                onPrimary = Color.White,
+                surface = Color.White,
+                onSurface = Color(0xFF0F172A),
+                background = Color(0xFFF4F6F8),
+                onBackground = Color(0xFF1E293B)
+            )
+
+            MaterialTheme(colorScheme = customColorScheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color(0xFFF4F6F8)
+                ) {
+                    AppNavigation(
+                        onStartCalls = { selectedList, ringTime, delayTime ->
+                            startFajrCalls(selectedList, ringTime, delayTime)
+                        },
+                        onStopCalls = { stopFajrCalls() }
+                    )
+                }
             }
         }
     }
@@ -190,7 +205,7 @@ fun FajrHomeScreen(
         // Status Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
@@ -200,7 +215,7 @@ fun FajrHomeScreen(
                 Text(
                     text = "Current Status",
                     fontSize = 18.sp,
-                    color = Color.Gray
+                    color = Color(0xFF64748B)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -219,7 +234,7 @@ fun FajrHomeScreen(
                 .fillMaxWidth()
                 .height(80.dp),
             shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7), contentColor = Color.White)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -228,6 +243,7 @@ fun FajrHomeScreen(
                 Icon(
                     imageVector = Icons.Default.List,
                     contentDescription = null,
+                    tint = Color.White,
                     modifier = Modifier.size(36.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -241,7 +257,7 @@ fun FajrHomeScreen(
                     Text(
                         text = "$selectedCount friends selected",
                         fontSize = 16.sp,
-                        color = Color.White.copy(alpha = 0.9f)
+                        color = Color.White.copy(alpha = 0.95f)
                     )
                 }
             }
@@ -254,7 +270,7 @@ fun FajrHomeScreen(
                 .fillMaxWidth()
                 .height(110.dp),
             shape = RoundedCornerShape(22.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A), contentColor = Color.White)
         ) {
             Text(
                 text = "START FAJR CALLS",
@@ -271,7 +287,7 @@ fun FajrHomeScreen(
                 .fillMaxWidth()
                 .height(80.dp),
             shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626), contentColor = Color.White)
         ) {
             Text(
                 text = "STOP ALL CALLS",
@@ -303,12 +319,14 @@ fun ContactPickerScreen(
     }
 
     Scaffold(
+        containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Choose Friends to Call (${selectedIds.size})") },
+                title = { Text("Choose Friends to Call (${selectedIds.size})", color = Color(0xFF0F172A)) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
                     }
                 },
                 actions = {
@@ -325,6 +343,7 @@ fun ContactPickerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF4F6F8))
                 .padding(padding)
         ) {
             // Mass Selection Control Bar
@@ -334,22 +353,26 @@ fun ContactPickerScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                OutlinedButton(onClick = {
-                    selectedIds = allContacts.map { it.phoneNumber }.toSet()
-                }) {
-                    Text("Select All")
+                OutlinedButton(
+                    onClick = { selectedIds = allContacts.map { it.phoneNumber }.toSet() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
+                ) {
+                    Text("Select All", fontWeight = FontWeight.Bold)
                 }
-                OutlinedButton(onClick = {
-                    selectedIds = emptySet()
-                }) {
-                    Text("Deselect All")
+                OutlinedButton(
+                    onClick = { selectedIds = emptySet() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
+                ) {
+                    Text("Deselect All", fontWeight = FontWeight.Bold)
                 }
             }
 
-            Divider()
+            Divider(color = Color(0xFFCBD5E1))
 
             LazyColumn(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White)
             ) {
                 items(allContacts) { contact ->
                     val isChecked = selectedIds.contains(contact.phoneNumber)
@@ -374,23 +397,28 @@ fun ContactPickerScreen(
                                 } else {
                                     selectedIds - contact.phoneNumber
                                 }
-                            }
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF16A34A),
+                                uncheckedColor = Color(0xFF64748B)
+                            )
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
                                 text = contact.name,
                                 fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF0F172A)
                             )
                             Text(
                                 text = contact.phoneNumber,
                                 fontSize = 16.sp,
-                                color = Color.Gray
+                                color = Color(0xFF475569)
                             )
                         }
                     }
-                    Divider(modifier = Modifier.padding(start = 56.dp))
+                    Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFE2E8F0))
                 }
             }
         }
@@ -409,12 +437,14 @@ fun SettingsScreen(
     var delayBetween by remember { mutableIntStateOf(initialDelayBetween) }
 
     Scaffold(
+        containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Call Settings") },
+                title = { Text("Call Settings", color = Color(0xFF0F172A)) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
                     }
                 },
                 actions = {
@@ -428,6 +458,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF4F6F8))
                 .padding(padding)
                 .padding(24.dp)
         ) {
@@ -436,13 +467,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         text = "Ring Duration Before Hanging Up",
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -455,7 +488,8 @@ fun SettingsScreen(
                         value = ringDuration.toFloat(),
                         onValueChange = { ringDuration = it.toInt() },
                         valueRange = 10f..60f,
-                        steps = 50
+                        steps = 50,
+                        colors = SliderDefaults.colors(thumbColor = Color(0xFF0284C7), activeTrackColor = Color(0xFF0284C7))
                     )
                 }
             }
@@ -465,13 +499,15 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
                         text = "Pause Delay Between Calls",
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -484,7 +520,8 @@ fun SettingsScreen(
                         value = delayBetween.toFloat(),
                         onValueChange = { delayBetween = it.toInt() },
                         valueRange = 2f..30f,
-                        steps = 28
+                        steps = 28,
+                        colors = SliderDefaults.colors(thumbColor = Color(0xFF16A34A), activeTrackColor = Color(0xFF16A34A))
                     )
                 }
             }
