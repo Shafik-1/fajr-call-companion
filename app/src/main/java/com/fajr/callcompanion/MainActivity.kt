@@ -1253,6 +1253,26 @@ fun QueueManagementScreen(
                                             color = if (canMoveDown) Color(0xFF0F172A) else Color(0xFFCBD5E1)
                                         )
                                     }
+
+                                    // REMOVE FROM QUEUE BUTTON
+                                    IconButton(
+                                        onClick = {
+                                            val newList = currentQueue.toMutableList()
+                                            newList.removeAt(index)
+                                            currentQueue = newList.toList()
+                                            onReorder(newList.toList())
+                                        },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(Color(0xFFFEE2E2), CircleShape)
+                                    ) {
+                                        Text(
+                                            text = "✕",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFFDC2626)
+                                        )
+                                    }
                                 }
                             }
                         }
