@@ -12,6 +12,9 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.*
 import android.provider.Settings
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
+import android.telephony.SubscriptionManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import android.view.Gravity
@@ -155,11 +158,47 @@ class FajrCallService : Service() {
             val callIntent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:$formattedNumber")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                putExtra("simSlot", selectedSimSlot)
-                putExtra("com.android.phone.extra.slot", selectedSimSlot)
-                putExtra("subscription", selectedSimSlot)
-                putExtra("sim_slot", selectedSimSlot)
             }
+
+            try {
+                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+                val subscriptionManager = getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
+
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
+                    val subList = subscriptionManager.activeSubscriptionInfoList
+                    if (!subList.isNullOrEmpty()) {
+                        val targetSub = subList.find { it.simSlotIndex == selectedSimSlot } ?: subList.getOrNull(selectedSimSlot)
+                        if (targetSub != null) {
+                            val subId = targetSub.subscriptionId
+                            callIntent.putExtra("subscription", subId)
+                            callIntent.putExtra("sub_id", subId)
+                            callIntent.putExtra("com.android.phone.extra.slot", targetSub.simSlotIndex)
+                            callIntent.putExtra("simSlot", targetSub.simSlotIndex)
+                            callIntent.putExtra("sim_slot", targetSub.simSlotIndex)
+                            callIntent.putExtra("slot", targetSub.simSlotIndex)
+                            callIntent.putExtra("com.android.phone.force.slot", true)
+                        }
+                    }
+
+                    val phoneAccountHandles = telecomManager.callCapablePhoneAccounts
+                    if (!phoneAccountHandles.isNullOrEmpty()) {
+                        var matchedHandle: PhoneAccountHandle? = null
+                        if (selectedSimSlot in phoneAccountHandles.indices) {
+                            matchedHandle = phoneAccountHandles[selectedSimSlot]
+                        }
+                        if (matchedHandle == null && phoneAccountHandles.isNotEmpty()) {
+                            matchedHandle = phoneAccountHandles[0]
+                        }
+                        matchedHandle?.let {
+                            callIntent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it)
+                            android.util.Log.d("FajrCallService", "Attached PhoneAccountHandle: ${it.id}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FajrCallService", "Error resolving dual-SIM handle: ${e.message}")
+            }
+
             startActivity(callIntent)
         } catch (e: SecurityException) {
             updateStatus("Permission error making call", currentContactIndex)
