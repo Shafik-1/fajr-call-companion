@@ -27,8 +27,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -384,12 +386,24 @@ fun ContactPickerScreen(
 ) {
     val context = LocalContext.current
     var allContacts by remember { mutableStateOf(listOf<ContactItem>()) }
+    var searchQuery by remember { mutableStateOf("") }
     var selectedIds by remember {
         mutableStateOf(alreadySelected.map { it.phoneNumber }.toSet())
     }
 
     LaunchedEffect(Unit) {
         allContacts = fetchPhoneContacts(context)
+    }
+
+    val filteredContacts = remember(allContacts, searchQuery) {
+        if (searchQuery.isBlank()) {
+            allContacts
+        } else {
+            allContacts.filter {
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                it.phoneNumber.contains(searchQuery, ignoreCase = true)
+            }
+        }
     }
 
     Scaffold(
@@ -420,20 +434,57 @@ fun ContactPickerScreen(
                 .background(Color(0xFFF4F6F8))
                 .padding(padding)
         ) {
+            // Search Input Box
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                placeholder = { Text("Search by name or number...", color = Color(0xFF94A3B8)) },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = Color(0xFF64748B))
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF64748B))
+                        }
+                    }
+                },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    disabledContainerColor = Color.White,
+                    focusedBorderColor = Color(0xFF0284C7),
+                    unfocusedBorderColor = Color(0xFFCBD5E1),
+                    focusedTextColor = Color(0xFF0F172A),
+                    unfocusedTextColor = Color(0xFF0F172A)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 OutlinedButton(
-                    onClick = { selectedIds = allContacts.map { it.phoneNumber }.toSet() },
+                    onClick = {
+                        val filteredNumbers = filteredContacts.map { it.phoneNumber }
+                        selectedIds = selectedIds + filteredNumbers
+                    },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
                 ) {
                     Text("Select All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 OutlinedButton(
-                    onClick = { selectedIds = emptySet() },
+                    onClick = {
+                        val filteredNumbers = filteredContacts.map { it.phoneNumber }.toSet()
+                        selectedIds = selectedIds - filteredNumbers
+                    },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
                 ) {
                     Text("Deselect All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -447,7 +498,7 @@ fun ContactPickerScreen(
                     .fillMaxSize()
                     .background(Color.White)
             ) {
-                items(allContacts) { contact ->
+                items(filteredContacts) { contact ->
                     val isChecked = selectedIds.contains(contact.phoneNumber)
                     Row(
                         modifier = Modifier
