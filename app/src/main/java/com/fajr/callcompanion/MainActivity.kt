@@ -1149,8 +1149,7 @@ fun QueueManagementScreen(
                                         text = contact.name,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = textColor,
-                                        textDecoration = if (isDone) TextDecoration.LineThrough else null
+                                        color = textColor
                                     )
                                     Text(
                                         text = contact.phoneNumber,
