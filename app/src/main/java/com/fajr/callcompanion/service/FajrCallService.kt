@@ -41,7 +41,7 @@ class FajrCallService : Service() {
     private var selectedSimSlot = 0
     private var enableInterceptor = true
     private var activeJob: Job? = null
-    private val pingBackDurationSeconds = 8  // short 1-ring ping
+    private var pingBackDurationSeconds = 8  // configurable short ping, set from intent
 
     private lateinit var telephonyManager: TelephonyManager
     private var phoneStateListener: PhoneStateListener? = null
@@ -58,6 +58,7 @@ class FajrCallService : Service() {
         const val EXTRA_START_INDEX = "EXTRA_START_INDEX"
         const val EXTRA_SIM_SLOT = "EXTRA_SIM_SLOT"
         const val EXTRA_ENABLE_INTERCEPTOR = "EXTRA_ENABLE_INTERCEPTOR"
+        const val EXTRA_PING_BACK_DURATION = "EXTRA_PING_BACK_DURATION"
 
         const val PREFS_NAME = "fajr_service_prefs"
         const val KEY_LAST_INDEX = "last_stopped_index"
@@ -86,6 +87,7 @@ class FajrCallService : Service() {
                 delayBetweenCallsSeconds = intent.getIntExtra(EXTRA_DELAY_BETWEEN, 5)
                 selectedSimSlot = intent.getIntExtra(EXTRA_SIM_SLOT, 0)
                 enableInterceptor = intent.getBooleanExtra(EXTRA_ENABLE_INTERCEPTOR, true)
+                pingBackDurationSeconds = intent.getIntExtra(EXTRA_PING_BACK_DURATION, 8)
                 val startIndex = intent.getIntExtra(EXTRA_START_INDEX, 0)
 
                 contactsQueue.clear()

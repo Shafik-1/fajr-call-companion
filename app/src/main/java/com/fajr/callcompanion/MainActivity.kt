@@ -71,8 +71,8 @@ class MainActivity : ComponentActivity() {
                     color = Color(0xFFF4F6F8)
                 ) {
                     AppNavigation(
-                        onStartCalls = { selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor ->
-                            startFajrCalls(selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor)
+                        onStartCalls = { selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor, pingBack ->
+                            startFajrCalls(selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor, pingBack)
                         },
                         onStopCalls = { stopFajrCalls() }
                     )
@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int, simSlot: Int, enableInterceptor: Boolean) {
+    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int, simSlot: Int, enableInterceptor: Boolean, pingBackDuration: Int = 8) {
         if (!android.provider.Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
             putExtra(FajrCallService.EXTRA_START_INDEX, startIndex)
             putExtra(FajrCallService.EXTRA_SIM_SLOT, simSlot)
             putExtra(FajrCallService.EXTRA_ENABLE_INTERCEPTOR, enableInterceptor)
+            putExtra(FajrCallService.EXTRA_PING_BACK_DURATION, pingBackDuration)
         }
         ContextCompat.startForegroundService(this, intent)
     }
@@ -149,7 +150,7 @@ enum class AppLanguage { EN, AR }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(
-    onStartCalls: (List<ContactItem>, Int, Int, Int, Int, Boolean) -> Unit,
+    onStartCalls: (List<ContactItem>, Int, Int, Int, Int, Boolean, Int) -> Unit,
     onStopCalls: () -> Unit
 ) {
     val context = LocalContext.current
@@ -160,6 +161,7 @@ fun AppNavigation(
     var selectedContacts by remember { mutableStateOf(loadSavedSelectedContacts(prefs)) }
     var ringDuration by remember { mutableIntStateOf(prefs.getInt("ring_duration", 25)) }
     var delayBetween by remember { mutableIntStateOf(prefs.getInt("delay_between", 5)) }
+    var pingBackDuration by remember { mutableIntStateOf(prefs.getInt("ping_back_duration", 8)) }
     var selectedSimSlot by remember { mutableIntStateOf(prefs.getInt("selected_sim_slot", -1)) }
     var enableInterceptor by remember { mutableStateOf(prefs.getBoolean("enable_interceptor", true)) }
     var currentLanguage by remember {
@@ -200,7 +202,7 @@ fun AppNavigation(
                     Toast.makeText(context, emptyMsg, Toast.LENGTH_LONG).show()
                 } else {
                     val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
-                    onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor)
+                    onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor, pingBackDuration)
                 }
             },
             onRestart = {
@@ -242,20 +244,23 @@ fun AppNavigation(
         Screen.SETTINGS -> SettingsScreen(
             initialRingDuration = ringDuration,
             initialDelayBetween = delayBetween,
+            initialPingBackDuration = pingBackDuration,
             initialLanguage = currentLanguage,
             initialEnableInterceptor = enableInterceptor,
             initialSimSlot = selectedSimSlot,
             selectedContacts = selectedContacts,
             onBack = { currentScreen = Screen.HOME },
-            onSaveSettings = { newRing, newDelay, newLang, newInterceptor, newSimSlot ->
+            onSaveSettings = { newRing, newDelay, newPingBack, newLang, newInterceptor, newSimSlot ->
                 ringDuration = newRing
                 delayBetween = newDelay
+                pingBackDuration = newPingBack
                 currentLanguage = newLang
                 enableInterceptor = newInterceptor
                 selectedSimSlot = newSimSlot
                 prefs.edit()
                     .putInt("ring_duration", newRing)
                     .putInt("delay_between", newDelay)
+                    .putInt("ping_back_duration", newPingBack)
                     .putString("app_lang", if (newLang == AppLanguage.AR) "AR" else "EN")
                     .putBoolean("enable_interceptor", newInterceptor)
                     .putInt("selected_sim_slot", newSimSlot)
@@ -728,17 +733,19 @@ fun ContactPickerScreen(
 fun SettingsScreen(
     initialRingDuration: Int,
     initialDelayBetween: Int,
+    initialPingBackDuration: Int,
     initialLanguage: AppLanguage,
     initialEnableInterceptor: Boolean,
     initialSimSlot: Int,
     selectedContacts: List<ContactItem>,
     onBack: () -> Unit,
-    onSaveSettings: (Int, Int, AppLanguage, Boolean, Int) -> Unit,
+    onSaveSettings: (Int, Int, Int, AppLanguage, Boolean, Int) -> Unit,
     onImportContacts: (List<ContactItem>) -> Unit
 ) {
     val context = LocalContext.current
     var ringDuration by remember { mutableIntStateOf(initialRingDuration) }
     var delayBetween by remember { mutableIntStateOf(initialDelayBetween) }
+    var pingBackDuration by remember { mutableIntStateOf(initialPingBackDuration) }
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
     var enableInterceptor by remember { mutableStateOf(initialEnableInterceptor) }
     var selectedSimSlot by remember { mutableIntStateOf(initialSimSlot) }
@@ -769,7 +776,7 @@ fun SettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween, selectedLanguage, enableInterceptor, selectedSimSlot) }) {
+                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween, pingBackDuration, selectedLanguage, enableInterceptor, selectedSimSlot) }) {
                         Icon(Icons.Default.Check, contentDescription = "Save", tint = Color(0xFF16A34A))
                     }
                 }
@@ -989,6 +996,44 @@ fun SettingsScreen(
                         valueRange = 1f..30f,
                         steps = 29,
                         colors = SliderDefaults.colors(thumbColor = Color(0xFF16A34A), activeTrackColor = Color(0xFF16A34A))
+                    )
+                }
+            }
+
+            // Ping-Back Duration Config
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (isAr) "مدة مكالمة الرد السريع" else "Ping-Back Call Duration",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (isAr) "مدة المكالمة القصيرة عند رد الاتصال تلقائياً" else "Duration of the short return call when a contact calls back",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (isAr) "$pingBackDuration ثانية" else "$pingBackDuration Seconds",
+                        fontSize = 20.sp,
+                        color = Color(0xFFF59E0B),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Slider(
+                        value = pingBackDuration.toFloat(),
+                        onValueChange = { pingBackDuration = it.toInt() },
+                        valueRange = 3f..30f,
+                        steps = 27,
+                        colors = SliderDefaults.colors(thumbColor = Color(0xFFF59E0B), activeTrackColor = Color(0xFFF59E0B))
                     )
                 }
             }
