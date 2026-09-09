@@ -43,7 +43,9 @@ class FajrCallService : Service() {
         var isRunning = false
         var currentStatusMessage = "Idle"
         var currentActiveIndex = 0
-        var onStatusUpdated: ((String, Int) -> Unit)? = null
+        var remainingSeconds = 0
+        var isPausePhase = false
+        var onStatusUpdated: ((String, Int, Int, Boolean) -> Unit)? = null
     }
 
     override fun onCreate() {
@@ -110,13 +112,26 @@ class FajrCallService : Service() {
 
         activeJob?.cancel()
         activeJob = serviceScope.launch {
-            delay(ringDurationSeconds * 1000L)
+            isPausePhase = false
+            for (sec in ringDurationSeconds downTo 1) {
+                if (!isCallInProgress.get() || isStoppedByUser) break
+                remainingSeconds = sec
+                updateStatus("Ringing ${contact.name} (${currentContactIndex + 1}/${contactsQueue.size})", currentContactIndex, sec, false)
+                delay(1000L)
+            }
+
             if (isCallInProgress.get() && !isStoppedByUser) {
-                val noAnsText = "No answer from ${contact.name}. Moving next..."
-                updateStatus(noAnsText, currentContactIndex)
-                updateNotification(noAnsText)
+                val noAnsText = "No answer from ${contact.name}. Hanging up..."
                 endCurrentCall()
-                delay(delayBetweenCallsSeconds * 1000L)
+
+                isPausePhase = true
+                for (sec in delayBetweenCallsSeconds downTo 1) {
+                    if (isStoppedByUser) break
+                    remainingSeconds = sec
+                    updateStatus("Pause before next call (${sec}s)...", currentContactIndex, sec, true)
+                    delay(1000L)
+                }
+
                 if (!isStoppedByUser) {
                     currentContactIndex++
                     processNextCall()
@@ -160,7 +175,13 @@ class FajrCallService : Service() {
                         if (isCallInProgress.getAndSet(false) && !isStoppedByUser) {
                             activeJob?.cancel()
                             activeJob = serviceScope.launch {
-                                delay(delayBetweenCallsSeconds * 1000L)
+                                isPausePhase = true
+                                for (sec in delayBetweenCallsSeconds downTo 1) {
+                                    if (isStoppedByUser) break
+                                    remainingSeconds = sec
+                                    updateStatus("Call ended. Pause before next call (${sec}s)...", currentContactIndex, sec, true)
+                                    delay(1000L)
+                                }
                                 if (!isStoppedByUser) {
                                     currentContactIndex++
                                     processNextCall()
@@ -171,7 +192,7 @@ class FajrCallService : Service() {
                     TelephonyManager.CALL_STATE_OFFHOOK -> {
                         if (!isStoppedByUser) {
                             val inCallText = "In call with ${contactsQueue.getOrNull(currentContactIndex)?.name ?: "Friend"}"
-                            updateStatus(inCallText, currentContactIndex)
+                            updateStatus(inCallText, currentContactIndex, 0, false)
                             updateNotification(inCallText)
                         }
                     }
@@ -192,10 +213,12 @@ class FajrCallService : Service() {
         stopSelf()
     }
 
-    private fun updateStatus(message: String, index: Int) {
+    private fun updateStatus(message: String, index: Int, countdown: Int = 0, isPause: Boolean = false) {
         currentStatusMessage = message
         currentActiveIndex = index
-        onStatusUpdated?.invoke(message, index)
+        remainingSeconds = countdown
+        isPausePhase = isPause
+        onStatusUpdated?.invoke(message, index, countdown, isPause)
     }
 
     private fun saveLastStoppedIndex(index: Int) {

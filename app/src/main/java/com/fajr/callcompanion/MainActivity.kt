@@ -136,11 +136,15 @@ fun AppNavigation(
 
     var statusMessage by remember { mutableStateOf(FajrCallService.currentStatusMessage) }
     var activeIndex by remember { mutableIntStateOf(servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)) }
+    var remainingSec by remember { mutableIntStateOf(FajrCallService.remainingSeconds) }
+    var isPause by remember { mutableStateOf(FajrCallService.isPausePhase) }
 
     DisposableEffect(Unit) {
-        FajrCallService.onStatusUpdated = { msg, idx ->
+        FajrCallService.onStatusUpdated = { msg, idx, countdown, pause ->
             statusMessage = msg
             activeIndex = idx
+            remainingSec = countdown
+            isPause = pause
         }
         onDispose {
             FajrCallService.onStatusUpdated = null
@@ -152,6 +156,8 @@ fun AppNavigation(
             selectedCount = selectedContacts.size,
             statusMessage = statusMessage,
             stoppedIndex = activeIndex,
+            remainingSec = remainingSec,
+            isPausePhase = isPause,
             onOpenContacts = { currentScreen = Screen.CONTACT_PICKER },
             onOpenSettings = { currentScreen = Screen.SETTINGS },
             onStart = {
@@ -166,6 +172,7 @@ fun AppNavigation(
             onStop = {
                 onStopCalls()
                 statusMessage = "Stopped by user"
+                remainingSec = 0
             }
         )
 
@@ -204,6 +211,8 @@ fun FajrHomeScreen(
     selectedCount: Int,
     statusMessage: String,
     stoppedIndex: Int,
+    remainingSec: Int,
+    isPausePhase: Boolean,
     onOpenContacts: () -> Unit,
     onOpenSettings: () -> Unit,
     onStart: () -> Unit,
@@ -247,14 +256,17 @@ fun FajrHomeScreen(
             }
         }
 
-        // Status Card
+        // Status & Countdown Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+            colors = CardDefaults.cardColors(
+                containerColor = if (remainingSec > 0 && isPausePhase) Color(0xFFFEF3C7) else Color.White,
+                contentColor = Color(0xFF0F172A)
+            ),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -269,7 +281,22 @@ fun FajrHomeScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
-                if (stoppedIndex > 0 && selectedCount > 0) {
+                if (remainingSec > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${remainingSec}s",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isPausePhase) Color(0xFFD97706) else Color(0xFF0284C7)
+                    )
+                    Text(
+                        text = if (isPausePhase) "PAUSE COUNTDOWN" else "RING COUNTDOWN",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B)
+                    )
+                }
+                if (stoppedIndex > 0 && selectedCount > 0 && remainingSec == 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Resume point: Contact #${stoppedIndex + 1}",
