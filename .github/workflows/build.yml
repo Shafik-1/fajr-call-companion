@@ -23,9 +23,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
-        env:
-          ANDROID_HOME: ${{ steps.setup-sdk.outputs.sdk-path }}
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
