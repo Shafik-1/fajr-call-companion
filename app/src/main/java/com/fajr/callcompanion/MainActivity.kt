@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int) {
+    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int, simSlot: Int, enableInterceptor: Boolean) {
         if (!android.provider.Settings.canDrawOverlays(this)) {
             val intent = Intent(
                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -114,6 +116,8 @@ class MainActivity : ComponentActivity() {
             putExtra(FajrCallService.EXTRA_RING_DURATION, ringDuration)
             putExtra(FajrCallService.EXTRA_DELAY_BETWEEN, delayBetween)
             putExtra(FajrCallService.EXTRA_START_INDEX, startIndex)
+            putExtra(FajrCallService.EXTRA_SIM_SLOT, simSlot)
+            putExtra(FajrCallService.EXTRA_ENABLE_INTERCEPTOR, enableInterceptor)
         }
         ContextCompat.startForegroundService(this, intent)
     }
@@ -132,7 +136,7 @@ enum class AppLanguage { EN, AR }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(
-    onStartCalls: (List<ContactItem>, Int, Int, Int) -> Unit,
+    onStartCalls: (List<ContactItem>, Int, Int, Int, Int, Boolean) -> Unit,
     onStopCalls: () -> Unit
 ) {
     val context = LocalContext.current
@@ -143,6 +147,8 @@ fun AppNavigation(
     var selectedContacts by remember { mutableStateOf(loadSavedSelectedContacts(prefs)) }
     var ringDuration by remember { mutableIntStateOf(prefs.getInt("ring_duration", 25)) }
     var delayBetween by remember { mutableIntStateOf(prefs.getInt("delay_between", 5)) }
+    var selectedSimSlot by remember { mutableIntStateOf(prefs.getInt("selected_sim_slot", 0)) }
+    var enableInterceptor by remember { mutableStateOf(prefs.getBoolean("enable_interceptor", true)) }
     var currentLanguage by remember {
         mutableStateOf(if (prefs.getString("app_lang", "EN") == "AR") AppLanguage.AR else AppLanguage.EN)
     }
@@ -176,12 +182,13 @@ fun AppNavigation(
             onOpenSettings = { currentScreen = Screen.SETTINGS },
             onStart = {
                 val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
-                onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex)
+                onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor)
             },
-            onRestart = {
+            onRestartQueue = {
                 servicePrefs.edit().putInt(FajrCallService.KEY_LAST_INDEX, 0).apply()
                 activeIndex = 0
-                onStartCalls(selectedContacts, ringDuration, delayBetween, 0)
+                val msg = if (currentLanguage == AppLanguage.AR) "تم إعادة تعيين القائمة إلى البداية!" else "Queue reset to beginning!"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             },
             onStop = {
                 onStopCalls()
@@ -205,16 +212,22 @@ fun AppNavigation(
             initialRingDuration = ringDuration,
             initialDelayBetween = delayBetween,
             initialLanguage = currentLanguage,
+            initialEnableInterceptor = enableInterceptor,
+            initialSimSlot = selectedSimSlot,
             selectedContacts = selectedContacts,
             onBack = { currentScreen = Screen.HOME },
-            onSaveSettings = { newRing, newDelay, newLang ->
+            onSaveSettings = { newRing, newDelay, newLang, newInterceptor, newSimSlot ->
                 ringDuration = newRing
                 delayBetween = newDelay
                 currentLanguage = newLang
+                enableInterceptor = newInterceptor
+                selectedSimSlot = newSimSlot
                 prefs.edit()
                     .putInt("ring_duration", newRing)
                     .putInt("delay_between", newDelay)
                     .putString("app_lang", if (newLang == AppLanguage.AR) "AR" else "EN")
+                    .putBoolean("enable_interceptor", newInterceptor)
+                    .putInt("selected_sim_slot", newSimSlot)
                     .apply()
                 currentScreen = Screen.HOME
             },
@@ -626,15 +639,19 @@ fun SettingsScreen(
     initialRingDuration: Int,
     initialDelayBetween: Int,
     initialLanguage: AppLanguage,
+    initialEnableInterceptor: Boolean,
+    initialSimSlot: Int,
     selectedContacts: List<ContactItem>,
     onBack: () -> Unit,
-    onSaveSettings: (Int, Int, AppLanguage) -> Unit,
+    onSaveSettings: (Int, Int, AppLanguage, Boolean, Int) -> Unit,
     onImportContacts: (List<ContactItem>) -> Unit
 ) {
     val context = LocalContext.current
     var ringDuration by remember { mutableIntStateOf(initialRingDuration) }
     var delayBetween by remember { mutableIntStateOf(initialDelayBetween) }
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
+    var enableInterceptor by remember { mutableStateOf(initialEnableInterceptor) }
+    var selectedSimSlot by remember { mutableIntStateOf(initialSimSlot) }
     val isAr = selectedLanguage == AppLanguage.AR
 
     // Export Launcher
@@ -662,7 +679,7 @@ fun SettingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween, selectedLanguage) }) {
+                    IconButton(onClick = { onSaveSettings(ringDuration, delayBetween, selectedLanguage, enableInterceptor, selectedSimSlot) }) {
                         Icon(Icons.Default.Check, contentDescription = "Save", tint = Color(0xFF16A34A))
                     }
                 }
@@ -674,6 +691,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .background(Color(0xFFF4F6F8))
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             // Language Selection Card
@@ -717,6 +735,92 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text("العربية", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                    }
+                }
+            }
+
+            // Incoming Call Queue Interceptor Toggle Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isAr) "اعتراض المكالمات الواردة وإعادة الترتيب" else "Decline & Prioritize Incoming Queue Calls",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isAr) "رفض المكالمة الواردة من الأصدقاء في القائمة والاتصال بهم فوراً" else "Decline calls from queue contacts & move uncalled friends to top of queue",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                    Switch(
+                        checked = enableInterceptor,
+                        onCheckedChange = { enableInterceptor = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF16A34A)
+                        )
+                    )
+                }
+            }
+
+            // SIM Card Selection Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (isAr) "شريحة الاتصال الافتراضية (SIM Card)" else "Default SIM Card for Calls",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = { selectedSimSlot = 0 },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedSimSlot == 0) Color(0xFF0284C7) else Color(0xFFE2E8F0),
+                                contentColor = if (selectedSimSlot == 0) Color.White else Color(0xFF475569)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (isAr) "شريحة 1 (SIM 1)" else "SIM 1", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Button(
+                            onClick = { selectedSimSlot = 1 },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedSimSlot == 1) Color(0xFF0284C7) else Color(0xFFE2E8F0),
+                                contentColor = if (selectedSimSlot == 1) Color.White else Color(0xFF475569)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (isAr) "شريحة 2 (SIM 2)" else "SIM 2", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
                 }

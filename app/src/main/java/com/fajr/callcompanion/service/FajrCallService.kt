@@ -35,6 +35,8 @@ class FajrCallService : Service() {
     private var isStoppedByUser = false
     private var ringDurationSeconds = 25
     private var delayBetweenCallsSeconds = 5
+    private var selectedSimSlot = 0
+    private var enableInterceptor = true
     private var activeJob: Job? = null
 
     private lateinit var telephonyManager: TelephonyManager
@@ -50,6 +52,8 @@ class FajrCallService : Service() {
         const val EXTRA_RING_DURATION = "EXTRA_RING_DURATION"
         const val EXTRA_DELAY_BETWEEN = "EXTRA_DELAY_BETWEEN"
         const val EXTRA_START_INDEX = "EXTRA_START_INDEX"
+        const val EXTRA_SIM_SLOT = "EXTRA_SIM_SLOT"
+        const val EXTRA_ENABLE_INTERCEPTOR = "EXTRA_ENABLE_INTERCEPTOR"
 
         const val PREFS_NAME = "fajr_service_prefs"
         const val KEY_LAST_INDEX = "last_stopped_index"
@@ -76,6 +80,8 @@ class FajrCallService : Service() {
                 val numbers = intent.getStringArrayExtra(EXTRA_NUMBERS) ?: emptyArray()
                 ringDurationSeconds = intent.getIntExtra(EXTRA_RING_DURATION, 25)
                 delayBetweenCallsSeconds = intent.getIntExtra(EXTRA_DELAY_BETWEEN, 5)
+                selectedSimSlot = intent.getIntExtra(EXTRA_SIM_SLOT, 0)
+                enableInterceptor = intent.getBooleanExtra(EXTRA_ENABLE_INTERCEPTOR, true)
                 val startIndex = intent.getIntExtra(EXTRA_START_INDEX, 0)
 
                 contactsQueue.clear()
@@ -149,6 +155,10 @@ class FajrCallService : Service() {
             val callIntent = Intent(Intent.ACTION_CALL).apply {
                 data = Uri.parse("tel:$formattedNumber")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                putExtra("simSlot", selectedSimSlot)
+                putExtra("com.android.phone.extra.slot", selectedSimSlot)
+                putExtra("subscription", selectedSimSlot)
+                putExtra("sim_slot", selectedSimSlot)
             }
             startActivity(callIntent)
         } catch (e: SecurityException) {
