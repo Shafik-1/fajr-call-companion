@@ -162,7 +162,7 @@ fun AppNavigation(
 
     when (currentScreen) {
         Screen.HOME -> FajrHomeScreen(
-            selectedCount = selectedContacts.size,
+            selectedContacts = selectedContacts,
             statusMessage = statusMessage,
             stoppedIndex = activeIndex,
             remainingSec = remainingSec,
@@ -217,7 +217,7 @@ fun AppNavigation(
 
 @Composable
 fun FajrHomeScreen(
-    selectedCount: Int,
+    selectedContacts: List<ContactItem>,
     statusMessage: String,
     stoppedIndex: Int,
     remainingSec: Int,
@@ -228,6 +228,9 @@ fun FajrHomeScreen(
     onRestart: () -> Unit,
     onStop: () -> Unit
 ) {
+    val selectedCount = selectedContacts.size
+    val nextContact = selectedContacts.getOrNull(stoppedIndex)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -308,7 +311,7 @@ fun FajrHomeScreen(
                 if (stoppedIndex > 0 && selectedCount > 0 && remainingSec == 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Resume point: Contact #${stoppedIndex + 1}",
+                        text = "Resume point: Contact #${stoppedIndex + 1}${if (nextContact != null) " (${nextContact.name})" else ""}",
                         fontSize = 13.sp,
                         color = Color(0xFF0284C7),
                         fontWeight = FontWeight.SemiBold
@@ -358,16 +361,28 @@ fun FajrHomeScreen(
             onClick = onStart,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(85.dp),
+                .height(90.dp),
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A), contentColor = Color.White)
         ) {
-            Text(
-                text = if (stoppedIndex > 0) "RESUME CALLS (#${stoppedIndex + 1})" else "START FAJR CALLS",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (stoppedIndex > 0) "RESUME CALLS (#${stoppedIndex + 1})" else "START FAJR CALLS",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
+                )
+                if (nextContact != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Next call: ${nextContact.name} (${nextContact.phoneNumber})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White.copy(alpha = 0.92f)
+                    )
+                }
+            }
+        }
         }
 
         // RESTART LIST & STOP CALLS BUTTON ROW
