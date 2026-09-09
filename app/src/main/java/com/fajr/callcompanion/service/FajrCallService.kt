@@ -172,7 +172,8 @@ class FajrCallService : Service() {
             override fun onCallStateChanged(state: Int, phoneNumber: String?) {
                 when (state) {
                     TelephonyManager.CALL_STATE_IDLE -> {
-                        if (isCallInProgress.getAndSet(false) && !isStoppedByUser) {
+                        val wasInCall = isCallInProgress.getAndSet(false)
+                        if (!isStoppedByUser && (wasInCall || isRunning)) {
                             activeJob?.cancel()
                             activeJob = serviceScope.launch {
                                 isPausePhase = true
