@@ -1086,14 +1086,15 @@ fun QueueManagementScreen(
                 )
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(12.dp),
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(currentQueue.size) { index ->
+                for (index in currentQueue.indices) {
                     val contact = currentQueue[index]
                     val isDone = isRunning && index < activeIndex
                     val isActive = isRunning && index == activeIndex
@@ -1149,7 +1150,7 @@ fun QueueManagementScreen(
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = textColor,
-                                        textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
+                                        textDecoration = if (isDone) TextDecoration.LineThrough else null
                                     )
                                     Text(
                                         text = contact.phoneNumber,
