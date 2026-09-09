@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_CALL_LOG
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.ANSWER_PHONE_CALLS
         )
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -147,7 +148,7 @@ fun AppNavigation(
     var selectedContacts by remember { mutableStateOf(loadSavedSelectedContacts(prefs)) }
     var ringDuration by remember { mutableIntStateOf(prefs.getInt("ring_duration", 25)) }
     var delayBetween by remember { mutableIntStateOf(prefs.getInt("delay_between", 5)) }
-    var selectedSimSlot by remember { mutableIntStateOf(prefs.getInt("selected_sim_slot", 0)) }
+    var selectedSimSlot by remember { mutableIntStateOf(prefs.getInt("selected_sim_slot", -1)) }
     var enableInterceptor by remember { mutableStateOf(prefs.getBoolean("enable_interceptor", true)) }
     var currentLanguage by remember {
         mutableStateOf(if (prefs.getString("app_lang", "EN") == "AR") AppLanguage.AR else AppLanguage.EN)
@@ -819,8 +820,20 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        Button(
+                            onClick = { selectedSimSlot = -1 },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedSimSlot == -1) Color(0xFF0284C7) else Color(0xFFE2E8F0),
+                                contentColor = if (selectedSimSlot == -1) Color.White else Color(0xFF475569)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                        ) {
+                            Text(if (isAr) "افتراضي النظام" else "Default / Ask", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                         Button(
                             onClick = { selectedSimSlot = 0 },
                             modifier = Modifier.weight(1f),
@@ -828,9 +841,10 @@ fun SettingsScreen(
                                 containerColor = if (selectedSimSlot == 0) Color(0xFF0284C7) else Color(0xFFE2E8F0),
                                 contentColor = if (selectedSimSlot == 0) Color.White else Color(0xFF475569)
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                         ) {
-                            Text(if (isAr) "شريحة 1 (SIM 1)" else "SIM 1", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(if (isAr) "شريحة 1" else "SIM 1", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                         Button(
                             onClick = { selectedSimSlot = 1 },
@@ -839,9 +853,10 @@ fun SettingsScreen(
                                 containerColor = if (selectedSimSlot == 1) Color(0xFF0284C7) else Color(0xFFE2E8F0),
                                 contentColor = if (selectedSimSlot == 1) Color.White else Color(0xFF475569)
                             ),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                         ) {
-                            Text(if (isAr) "شريحة 2 (SIM 2)" else "SIM 2", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(if (isAr) "شريحة 2" else "SIM 2", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }
