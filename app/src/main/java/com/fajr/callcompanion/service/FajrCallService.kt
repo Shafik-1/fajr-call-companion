@@ -3,10 +3,22 @@ package com.fajr.callcompanion.service
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color as AndroidColor
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.*
+import android.provider.Settings
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.widget.Button as AndroidButton
+import android.widget.LinearLayout
+import android.widget.TextView as AndroidTextView
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.fajr.callcompanion.model.ContactItem
 import kotlinx.coroutines.*
@@ -209,73 +221,74 @@ class FajrCallService : Service() {
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
     }
 
-    private var windowManager: android.view.WindowManager? = null
-    private var overlayView: android.view.View? = null
-    private var overlayText: android.widget.TextView? = null
-    private var overlaySubText: android.widget.TextView? = null
+    private var windowManager: WindowManager? = null
+    private var overlayView: View? = null
+    private var overlayText: AndroidTextView? = null
+    private var overlaySubText: AndroidTextView? = null
 
     private fun showOverlayWindow() {
-        if (!android.provider.Settings.canDrawOverlays(this)) return
+        if (!Settings.canDrawOverlays(this)) return
         if (overlayView != null) return
 
         try {
-            windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
-            val params = android.view.WindowManager.LayoutParams(
-                android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 else
-                    android.view.WindowManager.LayoutParams.TYPE_PHONE,
-                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-                android.graphics.PixelFormat.TRANSLUCENT
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 y = 100
             }
 
-            val layout = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.VERTICAL
+            val layout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
                 setPadding(40, 30, 40, 30)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor("#0F172A"))
+                background = GradientDrawable().apply {
+                    setColor(AndroidColor.parseColor("#0F172A"))
                     cornerRadius = 32f
                 }
                 elevation = 20f
             }
 
-            val titleView = android.widget.TextView(this).apply {
+            val titleView = AndroidTextView(this).apply {
                 text = "FAJR CALL COMPANION"
                 textSize = 12f
-                setTextColor(android.graphics.Color.parseColor("#94A3B8"))
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                gravity = android.view.Gravity.CENTER
+                setTextColor(AndroidColor.parseColor("#94A3B8"))
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
             }
             layout.addView(titleView)
 
-            overlayText = android.widget.TextView(this).apply {
+            overlayText = AndroidTextView(this).apply {
                 text = "Calling..."
                 textSize = 26f
-                setTextColor(android.graphics.Color.WHITE)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                gravity = android.view.Gravity.CENTER
+                setTextColor(AndroidColor.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
             }
             layout.addView(overlayText)
 
-            overlaySubText = android.widget.TextView(this).apply {
+            overlaySubText = AndroidTextView(this).apply {
                 text = "0s remaining"
                 textSize = 18f
-                setTextColor(android.graphics.Color.parseColor("#38BDF8"))
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                gravity = android.view.Gravity.CENTER
+                setTextColor(AndroidColor.parseColor("#38BDF8"))
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
             }
             layout.addView(overlaySubText)
 
-            val stopBtn = android.widget.Button(this).apply {
+            val stopBtn = AndroidButton(this).apply {
                 text = "STOP FAJR CALLS"
-                setTextColor(android.graphics.Color.WHITE)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(android.graphics.Color.parseColor("#DC2626"))
+                setTextColor(AndroidColor.WHITE)
+                background = GradientDrawable().apply {
+                    setColor(AndroidColor.parseColor("#DC2626"))
                     cornerRadius = 20f
                 }
                 setOnClickListener {
@@ -283,9 +296,9 @@ class FajrCallService : Service() {
                     stopCallingSequence("Stopped by user via overlay")
                 }
             }
-            val btnParams = android.widget.LinearLayout.LayoutParams(
-                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            val btnParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 topMargin = 16
             }
