@@ -24,14 +24,36 @@ An automated, senior-friendly Android application built with Kotlin and Jetpack 
    - Pauses for a configurable cooldown delay (e.g. 5s) before dialing the next friend.
    - Preserves state: allows resuming from the last stopped index or restarting from contact #1.
 
-4. **Active Queue Incoming Call Interceptor**:
-   - Configurable interceptor toggle (`enableInterceptor`).
-   - Monitors incoming calls while the Fajr queue sequence is active.
-   - Checks if the caller is in the active Fajr contact list.
-   - **Action**: Instantly declines the call (`call.reject()` / `call.disconnect()`).
-   - **Queue Prioritization**:
-     - If the caller has **not been called yet**: Moves them directly to the top of the remaining queue (`currentContactIndex + 1`) to call them immediately after the declination.
-     - If the caller was **already called**: Declines without re-calling and resumes normal queue order.
+4. **Active Queue Incoming Call Interceptor & Ping-Back**:
+
+   Configurable via the `enableInterceptor` toggle in Settings. When enabled and the Fajr calling sequence is active, the app intercepts any incoming call from a contact in your queue and handles it as follows:
+
+   #### 📌 Case A — Contact has NOT been called yet (still pending)
+   | Step | Action |
+   |------|--------|
+   | 1 | Incoming call detected → number matches a **pending (uncalled)** queue contact |
+   | 2 | Immediately **decline** their call (so they're not charged) |
+   | 3 | **Move them to the top** of the uncalled queue |
+   | 4 | **Call them back immediately** — short ping (1-ring acknowledgment) |
+   | 5 | Mark them as **done**, resume the rest of the queue normally |
+
+   #### 📌 Case B — Contact HAS already been called by the app
+   | Step | Action |
+   |------|--------|
+   | 1 | Incoming call detected → number matches an **already-called** contact |
+   | 2 | Immediately **decline** their call |
+   | 3 | The earlier outgoing call from the app **counts as the ping** — no second call needed |
+   | 4 | Mark as done (if not already) and continue queue normally |
+
+   #### 📌 Case C — Contact is currently being called right now (active turn)
+   | Step | Action |
+   |------|--------|
+   | 1 | Incoming call detected → number matches the **currently active** call target |
+   | 2 | **Decline** the incoming call |
+   | 3 | **End** the current outgoing call to them |
+   | 4 | Mark them as **done**, advance to the next person in queue |
+
+   > **Note**: Contact number matching strips all non-numeric characters and supports suffix/prefix matching to handle country code differences.
 
 5. **Contact Management & Backup**:
    - System contact picker with instant search by name or number.

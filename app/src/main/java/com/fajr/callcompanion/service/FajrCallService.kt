@@ -41,6 +41,7 @@ class FajrCallService : Service() {
     private var selectedSimSlot = 0
     private var enableInterceptor = true
     private var activeJob: Job? = null
+    private val pingBackDurationSeconds = 8  // short 1-ring ping
 
     private lateinit var telephonyManager: TelephonyManager
     private var phoneStateListener: PhoneStateListener? = null
@@ -131,6 +132,7 @@ class FajrCallService : Service() {
         updateStatus(statusText, currentContactIndex)
         updateNotification(statusText)
 
+        contact.wasAlreadyCalled = true
         makeSimCall(contact.phoneNumber)
 
         activeJob?.cancel()
@@ -203,6 +205,40 @@ class FajrCallService : Service() {
         } catch (e: SecurityException) {
             updateStatus("Permission error making call", currentContactIndex)
             stopCallingSequence("Permission error making call")
+        }
+    }
+
+    private fun declineIncomingCall() {
+        android.util.Log.d("FajrCall", ">>> declineIncomingCall triggered <<<")
+        // Strategy 1: InCallService disconnect (works if we're the default dialer companion)
+        if (FajrInCallService.disconnectActiveCall()) {
+            android.util.Log.d("FajrCall", "Declined via InCallService")
+            return
+        }
+        // Strategy 2: TelecomManager.endCall (Android 9+)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
+                    val res = telecomManager.endCall()
+                    android.util.Log.d("FajrCall", "Decline via TelecomManager result: $res")
+                    if (res) return
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FajrCall", "Decline TelecomManager exception: ${e.message}")
+        }
+        // Strategy 3: ITelephony reflection fallback
+        try {
+            val telephonyClass = Class.forName(telephonyManager.javaClass.name)
+            val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
+            methodGetITelephony.isAccessible = true
+            val iTelephony = methodGetITelephony.invoke(telephonyManager)
+            val methodEndCall = iTelephony.javaClass.getDeclaredMethod("endCall")
+            methodEndCall.invoke(iTelephony)
+            android.util.Log.d("FajrCall", "Declined via ITelephony reflection")
+        } catch (e: Exception) {
+            android.util.Log.e("FajrCall", "Decline ITelephony exception: ${e.message}")
         }
     }
 
@@ -297,42 +333,75 @@ class FajrCallService : Service() {
                     TelephonyManager.CALL_STATE_RINGING -> {
                         if (enableInterceptor && !phoneNumber.isNullOrEmpty()) {
                             val cleanIncoming = phoneNumber.replace(Regex("[^0-9+]"), "")
-                            val matchedContact = contactsQueue.find { 
+                            val matchedContact = contactsQueue.find {
                                 val cleanQueueNum = it.phoneNumber.replace(Regex("[^0-9+]"), "")
-                                cleanQueueNum == cleanIncoming || 
+                                cleanQueueNum == cleanIncoming ||
                                 (cleanIncoming.length >= 7 && cleanQueueNum.contains(cleanIncoming)) ||
                                 (cleanQueueNum.length >= 7 && cleanIncoming.contains(cleanQueueNum))
                             }
-                            
+
                             if (matchedContact != null) {
-                                android.util.Log.d("FajrCall", "Intercepting incoming call from ${matchedContact.name}")
-                                try {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                        val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-                                        telecomManager.endCall()
-                                        android.util.Log.d("FajrCall", "Intercepted via TelecomManager")
+                                android.util.Log.d("FajrCall", "Intercepting call from ${matchedContact.name} | alreadyCalled=${matchedContact.wasAlreadyCalled} | currentIndex=$currentContactIndex")
+
+                                // Decline the incoming call first (all 3 cases)
+                                declineIncomingCall()
+
+                                val matchedIndex = contactsQueue.indexOf(matchedContact)
+                                val isCurrentlyBeingCalled = (matchedIndex == currentContactIndex && isCallInProgress.get())
+
+                                when {
+                                    // ── CASE C: currently being called right now ──────────────────────────
+                                    isCurrentlyBeingCalled -> {
+                                        android.util.Log.d("FajrCall", "Case C: contact is active call target, ending outgoing call")
+                                        isCallInProgress.set(false)
+                                        activeJob?.cancel()
+                                        matchedContact.wasAlreadyCalled = true
+                                        currentContactIndex++
+                                        saveLastStoppedIndex(currentContactIndex)
+                                        serviceScope.launch {
+                                            delay(1500L) // brief pause before next
+                                            processNextCall()
+                                        }
                                     }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("FajrCall", "Error declining intercepted call: ${e.message}")
+
+                                    // ── CASE B: already called by app earlier ─────────────────────────────
+                                    matchedContact.wasAlreadyCalled -> {
+                                        android.util.Log.d("FajrCall", "Case B: already called ${matchedContact.name}, earlier call counts as ping. Skipping.")
+                                        // Nothing extra needed — queue continues normally
+                                    }
+
+                                    // ── CASE A: not yet called — decline + move to top + ping back ────────
+                                    else -> {
+                                        android.util.Log.d("FajrCall", "Case A: ${matchedContact.name} not yet called, moving to top and pinging back")
+                                        // Remove from current position and insert right after current index
+                                        contactsQueue.remove(matchedContact)
+                                        val insertAt = (currentContactIndex + 1).coerceAtMost(contactsQueue.size)
+                                        contactsQueue.add(insertAt, matchedContact)
+
+                                        // Pause current job, ping them back after a brief delay
+                                        activeJob?.cancel()
+                                        serviceScope.launch {
+                                            delay(1500L) // give time for declined call to clear
+                                            if (!isStoppedByUser) {
+                                                android.util.Log.d("FajrCall", "Case A: pinging back ${matchedContact.name}")
+                                                isCallInProgress.set(true)
+                                                matchedContact.wasAlreadyCalled = true
+                                                makeSimCall(matchedContact.phoneNumber)
+
+                                                // Short ping duration (1 ring)
+                                                for (sec in pingBackDurationSeconds downTo 1) {
+                                                    if (!isCallInProgress.get() || isStoppedByUser) break
+                                                    remainingSeconds = sec
+                                                    updateStatus("Pinging ${matchedContact.name} back (${sec}s)...", currentContactIndex, sec, false)
+                                                    delay(1000L)
+                                                }
+                                                if (isCallInProgress.get() && !isStoppedByUser) {
+                                                    endCurrentCall()
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                
-                                // Strategy 3 fallback for older devices or if TelecomManager fails
-                                try {
-                                    val telephonyClass = Class.forName(telephonyManager.javaClass.name)
-                                    val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
-                                    methodGetITelephony.isAccessible = true
-                                    val iTelephony = methodGetITelephony.invoke(telephonyManager)
-                                    val methodEndCall = iTelephony.javaClass.getDeclaredMethod("endCall")
-                                    methodEndCall.invoke(iTelephony)
-                                    android.util.Log.d("FajrCall", "Intercepted via ITelephony")
-                                } catch (e: Exception) {
-                                    android.util.Log.e("FajrCall", "Error declining intercepted call via ITelephony: ${e.message}")
-                                }
-                                
-                                // Move uncalled friends to top of queue or mark this contact as done
-                                // The requirement says "move uncalled friends to top of queue" 
-                                // Actually, if we just decline it, we know they are awake. We can skip calling them later.
-                                // We can just let the normal queue continue. 
                             }
                         }
                     }

@@ -4,7 +4,8 @@ data class ContactItem(
     val id: String,
     val name: String,
     val phoneNumber: String,
-    var isSelected: Boolean = false
+    var isSelected: Boolean = false,
+    var wasAlreadyCalled: Boolean = false
 )
 
 data class AppSettings(
