@@ -209,15 +209,110 @@ class FajrCallService : Service() {
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
     }
 
-    private fun stopCallingSequence(reason: String) {
-        isStoppedByUser = true
-        isRunning = false
-        isCallInProgress.set(false)
-        activeJob?.cancel()
-        updateStatus(reason, currentContactIndex)
-        updateNotification(reason)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+    private var windowManager: android.view.WindowManager? = null
+    private var overlayView: android.view.View? = null
+    private var overlayText: android.widget.TextView? = null
+    private var overlaySubText: android.widget.TextView? = null
+
+    private fun showOverlayWindow() {
+        if (!android.provider.Settings.canDrawOverlays(this)) return
+        if (overlayView != null) return
+
+        try {
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            val params = android.view.WindowManager.LayoutParams(
+                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else
+                    android.view.WindowManager.LayoutParams.TYPE_PHONE,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                android.graphics.PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+                y = 100
+            }
+
+            val layout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(40, 30, 40, 30)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(android.graphics.Color.parseColor("#0F172A"))
+                    cornerRadius = 32f
+                }
+                elevation = 20f
+            }
+
+            val titleView = android.widget.TextView(this).apply {
+                text = "FAJR CALL COMPANION"
+                textSize = 12f
+                setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = android.view.Gravity.CENTER
+            }
+            layout.addView(titleView)
+
+            overlayText = android.widget.TextView(this).apply {
+                text = "Calling..."
+                textSize = 26f
+                setTextColor(android.graphics.Color.WHITE)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = android.view.Gravity.CENTER
+            }
+            layout.addView(overlayText)
+
+            overlaySubText = android.widget.TextView(this).apply {
+                text = "0s remaining"
+                textSize = 18f
+                setTextColor(android.graphics.Color.parseColor("#38BDF8"))
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = android.view.Gravity.CENTER
+            }
+            layout.addView(overlaySubText)
+
+            val stopBtn = android.widget.Button(this).apply {
+                text = "STOP FAJR CALLS"
+                setTextColor(android.graphics.Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(android.graphics.Color.parseColor("#DC2626"))
+                    cornerRadius = 20f
+                }
+                setOnClickListener {
+                    endCurrentCall()
+                    stopCallingSequence("Stopped by user via overlay")
+                }
+            }
+            val btnParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = 16
+            }
+            layout.addView(stopBtn, btnParams)
+
+            overlayView = layout
+            windowManager?.addView(overlayView, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun updateOverlayContent(status: String, seconds: Int) {
+        if (overlayView == null) showOverlayWindow()
+        overlayText?.text = status
+        overlaySubText?.text = if (seconds > 0) "${seconds}s Remaining" else ""
+    }
+
+    private fun removeOverlayWindow() {
+        try {
+            if (overlayView != null) {
+                windowManager?.removeView(overlayView)
+                overlayView = null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun updateStatus(message: String, index: Int, countdown: Int = 0, isPause: Boolean = false) {
@@ -225,7 +320,20 @@ class FajrCallService : Service() {
         currentActiveIndex = index
         remainingSeconds = countdown
         isPausePhase = isPause
+        updateOverlayContent(message, countdown)
         onStatusUpdated?.invoke(message, index, countdown, isPause)
+    }
+
+    private fun stopCallingSequence(reason: String) {
+        isStoppedByUser = true
+        isRunning = false
+        isCallInProgress.set(false)
+        activeJob?.cancel()
+        removeOverlayWindow()
+        updateStatus(reason, currentContactIndex)
+        updateNotification(reason)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun saveLastStoppedIndex(index: Int) {
@@ -266,6 +374,7 @@ class FajrCallService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        removeOverlayWindow()
         phoneStateListener?.let { telephonyManager.listen(it, PhoneStateListener.LISTEN_NONE) }
         serviceScope.cancel()
         isRunning = false

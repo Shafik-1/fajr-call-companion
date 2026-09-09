@@ -95,6 +95,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int) {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            Toast.makeText(this, "Please grant 'Display over other apps' permission for call overlay", Toast.LENGTH_LONG).show()
+        }
+
         val names = contacts.map { it.name }.toTypedArray()
         val numbers = contacts.map { it.phoneNumber }.toTypedArray()
 
