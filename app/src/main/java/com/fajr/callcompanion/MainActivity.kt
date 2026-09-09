@@ -383,7 +383,6 @@ fun FajrHomeScreen(
                 }
             }
         }
-        }
 
         // RESTART LIST & STOP CALLS BUTTON ROW
         Row(
