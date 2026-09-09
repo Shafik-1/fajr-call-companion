@@ -82,18 +82,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkAndRequestPermissions() {
-        val permissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.CALL_PHONE,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.READ_CALL_LOG,
             Manifest.permission.ANSWER_PHONE_CALLS
         )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), 101)
+        }
+
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            Toast.makeText(this, "Please grant 'Display over other apps' permission for call overlay", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -182,8 +194,13 @@ fun AppNavigation(
             onOpenContacts = { currentScreen = Screen.CONTACT_PICKER },
             onOpenSettings = { currentScreen = Screen.SETTINGS },
             onStart = {
-                val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
-                onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor)
+                if (selectedContacts.isEmpty()) {
+                    val emptyMsg = if (currentLanguage == AppLanguage.AR) "القائمة فارغة! يرجى اختيار الأصدقاء أولاً" else "The contact list is empty! Please choose friends first."
+                    Toast.makeText(context, emptyMsg, Toast.LENGTH_LONG).show()
+                } else {
+                    val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
+                    onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor)
+                }
             },
             onRestart = {
                 servicePrefs.edit().putInt(FajrCallService.KEY_LAST_INDEX, 0).apply()
@@ -871,14 +888,14 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Ring Duration Before Hanging Up",
+                        text = if (isAr) "مدة الرنين قبل الإنهاء" else "Ring Duration Before Hanging Up",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$ringDuration Seconds",
+                        text = if (isAr) "$ringDuration ثانية" else "$ringDuration Seconds",
                         fontSize = 20.sp,
                         color = Color(0xFF0284C7),
                         fontWeight = FontWeight.ExtraBold
@@ -886,8 +903,8 @@ fun SettingsScreen(
                     Slider(
                         value = ringDuration.toFloat(),
                         onValueChange = { ringDuration = it.toInt() },
-                        valueRange = 10f..60f,
-                        steps = 50,
+                        valueRange = 3f..60f,
+                        steps = 57,
                         colors = SliderDefaults.colors(thumbColor = Color(0xFF0284C7), activeTrackColor = Color(0xFF0284C7))
                     )
                 }
@@ -903,14 +920,14 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Pause Delay Between Calls",
+                        text = if (isAr) "مدة الاستراحة بين المكالمات" else "Pause Delay Between Calls",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$delayBetween Seconds",
+                        text = if (isAr) "$delayBetween ثانية" else "$delayBetween Seconds",
                         fontSize = 20.sp,
                         color = Color(0xFF16A34A),
                         fontWeight = FontWeight.ExtraBold
@@ -918,8 +935,8 @@ fun SettingsScreen(
                     Slider(
                         value = delayBetween.toFloat(),
                         onValueChange = { delayBetween = it.toInt() },
-                        valueRange = 2f..30f,
-                        steps = 28,
+                        valueRange = 1f..30f,
+                        steps = 29,
                         colors = SliderDefaults.colors(thumbColor = Color(0xFF16A34A), activeTrackColor = Color(0xFF16A34A))
                     )
                 }
