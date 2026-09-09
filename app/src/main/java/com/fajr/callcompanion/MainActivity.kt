@@ -1152,7 +1152,7 @@ fun QueueManagementScreen(
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = textColor,
-                                        style = if (isDone) androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                                        textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
                                     )
                                     Text(
                                         text = contact.phoneNumber,
