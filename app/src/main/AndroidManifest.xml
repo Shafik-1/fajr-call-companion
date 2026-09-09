@@ -27,6 +27,15 @@
         </activity>
 
         <service
+            android:name=".service.FajrInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".service.FajrCallService"
             android:enabled="true"
             android:exported="false"

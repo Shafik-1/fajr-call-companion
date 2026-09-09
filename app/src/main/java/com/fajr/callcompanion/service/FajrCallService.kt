@@ -161,7 +161,12 @@ class FajrCallService : Service() {
         isCallInProgress.set(false)
         activeJob?.cancel()
 
-        // Strategy 1: TelecomManager (Android 9+)
+        // Strategy 1: Native InCallService disconnect (Guaranteed on Android 10/MIUI)
+        if (FajrInCallService.disconnectActiveCall()) {
+            return
+        }
+
+        // Strategy 2: TelecomManager (Android 9+)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
@@ -173,7 +178,7 @@ class FajrCallService : Service() {
             e.printStackTrace()
         }
 
-        // Strategy 2: Reflection on ITelephony (Xiaomi / MIUI compatibility)
+        // Strategy 3: Reflection on ITelephony (Xiaomi / MIUI compatibility)
         try {
             val telephonyClass = Class.forName(telephonyManager.javaClass.name)
             val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
@@ -185,7 +190,7 @@ class FajrCallService : Service() {
             e.printStackTrace()
         }
 
-        // Strategy 3: Broadcast disconnect intent for custom call screens
+        // Strategy 4: Broadcast disconnect intent for headset hooks
         try {
             val mediaKeyIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
             mediaKeyIntent.putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
