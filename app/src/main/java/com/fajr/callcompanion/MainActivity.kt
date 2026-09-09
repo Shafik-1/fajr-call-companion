@@ -310,13 +310,34 @@ fun FajrHomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Current Status",
+                    text = if (isAr) "الحالة الحالية" else "Current Status",
                     fontSize = 15.sp,
                     color = Color(0xFF64748B)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                val localizedStatus = when {
+                    statusMessage.contains("Stopped by user via overlay") || statusMessage.contains("Stopped by user") -> if (isAr) "تم الإيقاف بواسطة المستخدم" else "Stopped by user"
+                    statusMessage.contains("No contacts selected to call") -> if (isAr) "لم يتم تحديد أصدقاء للاتصال بهم!" else "No contacts selected to call!"
+                    statusMessage.contains("All Fajr calls completed") -> if (isAr) "تمت جميع مكالمات الفجر بنجاح!" else "All Fajr calls completed!"
+                    statusMessage.contains("Calling") -> {
+                        if (isAr) statusMessage.replace("Calling", "جاري الاتصال بـ").replace("contact #", "صديق #") else statusMessage
+                    }
+                    statusMessage.contains("Ringing") -> {
+                        if (isAr) statusMessage.replace("Ringing", "جاري الرنين لـ") else statusMessage
+                    }
+                    statusMessage.contains("In call with") -> {
+                        if (isAr) statusMessage.replace("In call with", "في مكالمة مع") else statusMessage
+                    }
+                    statusMessage.contains("No answer from") -> {
+                        if (isAr) statusMessage.replace("No answer from", "لا يوجد رد من").replace(". Hanging up...", ". جاري الإنهاء...") else statusMessage
+                    }
+                    statusMessage.contains("Call completed! Pause before next call") -> {
+                        if (isAr) "تمت المكالمة! استراحة قبل المكالمة التالية..." else statusMessage
+                    }
+                    else -> statusMessage
+                }
                 Text(
-                    text = statusMessage,
+                    text = localizedStatus,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
@@ -324,13 +345,13 @@ fun FajrHomeScreen(
                 if (remainingSec > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "${remainingSec}s",
+                        text = if (isAr) "$remainingSec ثانية" else "${remainingSec}s",
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Black,
                         color = if (isPausePhase) Color(0xFFD97706) else Color(0xFF0284C7)
                     )
                     Text(
-                        text = if (isPausePhase) "PAUSE COUNTDOWN" else "RING COUNTDOWN",
+                        text = if (isPausePhase) (if (isAr) "العد التنازلي للاستراحة" else "PAUSE COUNTDOWN") else (if (isAr) "العد التنازلي للرنين" else "RING COUNTDOWN"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF64748B)
@@ -339,7 +360,7 @@ fun FajrHomeScreen(
                 if (stoppedIndex > 0 && selectedCount > 0 && remainingSec == 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Resume point: Contact #${stoppedIndex + 1}${if (nextContact != null) " (${nextContact.name})" else ""}",
+                        text = if (isAr) "نقطة الاستئناف: صديق #${stoppedIndex + 1}${if (nextContact != null) " (${nextContact.name})" else ""}" else "Resume point: Contact #${stoppedIndex + 1}${if (nextContact != null) " (${nextContact.name})" else ""}",
                         fontSize = 13.sp,
                         color = Color(0xFF0284C7),
                         fontWeight = FontWeight.SemiBold
