@@ -1207,8 +1207,8 @@ fun QueueManagementScreen(
                                                 val newList = currentQueue.toMutableList()
                                                 val item = newList.removeAt(index)
                                                 newList.add(index - 1, item)
-                                                currentQueue = newList
-                                                onReorder(newList)
+                                                currentQueue = newList.toList()
+                                                onReorder(newList.toList())
                                             }
                                         },
                                         enabled = canMoveUp,
@@ -1234,8 +1234,8 @@ fun QueueManagementScreen(
                                                 val newList = currentQueue.toMutableList()
                                                 val item = newList.removeAt(index)
                                                 newList.add(index + 1, item)
-                                                currentQueue = newList
-                                                onReorder(newList)
+                                                currentQueue = newList.toList()
+                                                onReorder(newList.toList())
                                             }
                                         },
                                         enabled = canMoveDown,
