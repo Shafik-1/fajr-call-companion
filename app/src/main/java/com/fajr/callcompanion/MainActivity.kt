@@ -226,21 +226,21 @@ fun FajrHomeScreen(
         ) {
             Text(
                 text = "Fajr Call Companion",
-                fontSize = 28.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1E293B)
             )
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(48.dp)
                     .background(Color.White, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
                     tint = Color(0xFF475569),
-                    modifier = Modifier.size(30.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
@@ -252,18 +252,18 @@ fun FajrHomeScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Current Status",
-                    fontSize = 18.sp,
+                    fontSize = 15.sp,
                     color = Color(0xFF64748B)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = statusMessage,
-                    fontSize = 22.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
@@ -271,7 +271,7 @@ fun FajrHomeScreen(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Resume point: Contact #${stoppedIndex + 1}",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         color = Color(0xFF0284C7),
                         fontWeight = FontWeight.SemiBold
                     )
@@ -284,8 +284,8 @@ fun FajrHomeScreen(
             onClick = onOpenContacts,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(75.dp),
-            shape = RoundedCornerShape(18.dp),
+                .height(65.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7), contentColor = Color.White)
         ) {
             Row(
@@ -296,19 +296,19 @@ fun FajrHomeScreen(
                     imageVector = Icons.Default.List,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
                         text = "CHOOSE LIST",
-                        fontSize = 22.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
                         text = "$selectedCount friends saved",
-                        fontSize = 15.sp,
+                        fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.95f)
                     )
                 }
@@ -320,13 +320,13 @@ fun FajrHomeScreen(
             onClick = onStart,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(95.dp),
-            shape = RoundedCornerShape(20.dp),
+                .height(85.dp),
+            shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A), contentColor = Color.White)
         ) {
             Text(
                 text = if (stoppedIndex > 0) "RESUME CALLS (#${stoppedIndex + 1})" else "START FAJR CALLS",
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
             )
@@ -335,21 +335,21 @@ fun FajrHomeScreen(
         // RESTART LIST & STOP CALLS BUTTON ROW
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // RESTART FROM BEGINNING BUTTON
             OutlinedButton(
                 onClick = onRestart,
                 modifier = Modifier
                     .weight(1f)
-                    .height(75.dp),
-                shape = RoundedCornerShape(18.dp),
+                    .height(65.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Restart", modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Restart #1", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Refresh, contentDescription = "Restart", modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Restart #1", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -358,20 +358,20 @@ fun FajrHomeScreen(
                 onClick = onStop,
                 modifier = Modifier
                     .weight(1f)
-                    .height(75.dp),
-                shape = RoundedCornerShape(18.dp),
+                    .height(65.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626), contentColor = Color.White)
             ) {
                 Text(
                     text = "STOP CALLS",
-                    fontSize = 20.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
@@ -396,7 +396,7 @@ fun ContactPickerScreen(
         containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Choose Friends to Call (${selectedIds.size})", color = Color(0xFF0F172A)) },
+                title = { Text("Choose Friends (${selectedIds.size})", color = Color(0xFF0F172A), fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -408,7 +408,7 @@ fun ContactPickerScreen(
                         val selectedList = allContacts.filter { selectedIds.contains(it.phoneNumber) }
                         onSaveSelection(selectedList)
                     }) {
-                        Text("DONE", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                        Text("DONE", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
                     }
                 }
             )
@@ -423,20 +423,20 @@ fun ContactPickerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 OutlinedButton(
                     onClick = { selectedIds = allContacts.map { it.phoneNumber }.toSet() },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
                 ) {
-                    Text("Select All", fontWeight = FontWeight.Bold)
+                    Text("Select All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 OutlinedButton(
                     onClick = { selectedIds = emptySet() },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
                 ) {
-                    Text("Deselect All", fontWeight = FontWeight.Bold)
+                    Text("Deselect All", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
 
@@ -459,7 +459,7 @@ fun ContactPickerScreen(
                                     selectedIds + contact.phoneNumber
                                 }
                             }
-                            .padding(16.dp),
+                            .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -476,22 +476,22 @@ fun ContactPickerScreen(
                                 uncheckedColor = Color(0xFF64748B)
                             )
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = contact.name,
-                                fontSize = 20.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF0F172A)
                             )
                             Text(
                                 text = contact.phoneNumber,
-                                fontSize = 16.sp,
+                                fontSize = 14.sp,
                                 color = Color(0xFF475569)
                             )
                         }
                     }
-                    Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFE2E8F0))
+                    Divider(modifier = Modifier.padding(start = 48.dp), color = Color(0xFFE2E8F0))
                 }
             }
         }
@@ -529,7 +529,7 @@ fun SettingsScreen(
         containerColor = Color(0xFFF4F6F8),
         topBar = {
             TopAppBar(
-                title = { Text("Call Settings", color = Color(0xFF0F172A)) },
+                title = { Text("Call Settings", color = Color(0xFF0F172A), fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -549,27 +549,27 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .background(Color(0xFFF4F6F8))
                 .padding(padding)
-                .padding(24.dp)
+                .padding(16.dp)
         ) {
             // Ring Duration Config
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Ring Duration Before Hanging Up",
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "$ringDuration Seconds",
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         color = Color(0xFF0284C7),
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -587,21 +587,21 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Pause Delay Between Calls",
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "$delayBetween Seconds",
-                        fontSize = 24.sp,
+                        fontSize = 20.sp,
                         color = Color(0xFF16A34A),
                         fontWeight = FontWeight.ExtraBold
                     )
@@ -619,37 +619,37 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 10.dp),
+                    .padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "Backup & Share Contact List",
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedButton(
                             onClick = { exportLauncher.launch("fajr_contacts_backup.csv") },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export CSV")
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Export CSV", fontSize = 14.sp)
                         }
                         OutlinedButton(
                             onClick = { importLauncher.launch(arrayOf("*/*")) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.List, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import CSV")
+                            Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Import CSV", fontSize = 14.sp)
                         }
                     }
                 }
