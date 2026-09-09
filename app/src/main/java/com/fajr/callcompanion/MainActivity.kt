@@ -33,9 +33,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -458,7 +455,7 @@ fun FajrHomeScreen(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.FormatListNumbered,
+                        imageVector = Icons.Default.List,
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1222,11 +1219,11 @@ fun QueueManagementScreen(
                                                 CircleShape
                                             )
                                     ) {
-                                        Icon(
-                                            Icons.Default.ArrowUpward,
-                                            contentDescription = "Move Up",
-                                            tint = if (canMoveUp) Color(0xFF0F172A) else Color(0xFFCBD5E1),
-                                            modifier = Modifier.size(20.dp)
+                                        Text(
+                                            text = "▲",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (canMoveUp) Color(0xFF0F172A) else Color(0xFFCBD5E1)
                                         )
                                     }
 
@@ -1249,11 +1246,11 @@ fun QueueManagementScreen(
                                                 CircleShape
                                             )
                                     ) {
-                                        Icon(
-                                            Icons.Default.ArrowDownward,
-                                            contentDescription = "Move Down",
-                                            tint = if (canMoveDown) Color(0xFF0F172A) else Color(0xFFCBD5E1),
-                                            modifier = Modifier.size(20.dp)
+                                        Text(
+                                            text = "▼",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (canMoveDown) Color(0xFF0F172A) else Color(0xFFCBD5E1)
                                         )
                                     }
                                 }
