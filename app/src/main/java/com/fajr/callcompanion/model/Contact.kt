@@ -1,8 +1,13 @@
 package com.fajr.callcompanion.model
 
-data class Contact(
+data class ContactItem(
     val id: String,
     val name: String,
     val phoneNumber: String,
-    val ringDurationSeconds: Int = 25
+    var isSelected: Boolean = false
+)
+
+data class AppSettings(
+    val ringDurationSeconds: Int = 25,
+    val delayBetweenCallsSeconds: Int = 5
 )

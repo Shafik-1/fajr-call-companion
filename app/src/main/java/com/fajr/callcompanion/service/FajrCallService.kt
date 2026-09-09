@@ -8,17 +8,19 @@ import android.os.*
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
-import com.fajr.callcompanion.model.Contact
+import com.fajr.callcompanion.model.ContactItem
 import kotlinx.coroutines.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 class FajrCallService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
-    private var contactsQueue = mutableListOf<Contact>()
+    private var contactsQueue = mutableListOf<ContactItem>()
     private var currentContactIndex = 0
     private val isCallInProgress = AtomicBoolean(false)
     private var isStoppedByUser = false
+    private var ringDurationSeconds = 25
+    private var delayBetweenCallsSeconds = 5
 
     private lateinit var telephonyManager: TelephonyManager
     private var phoneStateListener: PhoneStateListener? = null
@@ -27,6 +29,10 @@ class FajrCallService : Service() {
         const val CHANNEL_ID = "FajrCallServiceChannel"
         const val ACTION_START = "ACTION_START_CALLS"
         const val ACTION_STOP = "ACTION_STOP_CALLS"
+        const val EXTRA_NAMES = "EXTRA_NAMES"
+        const val EXTRA_NUMBERS = "EXTRA_NUMBERS"
+        const val EXTRA_RING_DURATION = "EXTRA_RING_DURATION"
+        const val EXTRA_DELAY_BETWEEN = "EXTRA_DELAY_BETWEEN"
 
         var isRunning = false
         var currentStatusMessage = "Idle"
@@ -42,15 +48,27 @@ class FajrCallService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                val names = intent.getStringArrayExtra(EXTRA_NAMES) ?: emptyArray()
+                val numbers = intent.getStringArrayExtra(EXTRA_NUMBERS) ?: emptyArray()
+                ringDurationSeconds = intent.getIntExtra(EXTRA_RING_DURATION, 25)
+                delayBetweenCallsSeconds = intent.getIntExtra(EXTRA_DELAY_BETWEEN, 5)
+
+                contactsQueue.clear()
+                for (i in names.indices) {
+                    if (i < numbers.size) {
+                        contactsQueue.add(ContactItem(id = i.toString(), name = names[i], phoneNumber = numbers[i], isSelected = true))
+                    }
+                }
+
+                if (contactsQueue.isEmpty()) {
+                    stopCallingSequence("No contacts selected to call!")
+                    return START_NOT_STICKY
+                }
+
                 val notification = buildNotification("Preparing Fajr calls...")
                 startForeground(1001, notification)
                 isRunning = true
                 isStoppedByUser = false
-                
-                contactsQueue = mutableListOf(
-                    Contact("1", "Friend 1", "+1234567890", 25),
-                    Contact("2", "Friend 2", "+0987654321", 20)
-                )
                 currentContactIndex = 0
                 processNextCall()
             }
@@ -70,18 +88,18 @@ class FajrCallService : Service() {
         }
 
         val contact = contactsQueue[currentContactIndex]
-        currentStatusMessage = "Calling ${contact.name}..."
+        currentStatusMessage = "Calling ${contact.name} (${currentContactIndex + 1}/${contactsQueue.size})..."
         updateNotification(currentStatusMessage)
 
         makeSimCall(contact.phoneNumber)
 
         serviceScope.launch {
-            delay(contact.ringDurationSeconds * 1000L)
+            delay(ringDurationSeconds * 1000L)
             if (isCallInProgress.get()) {
                 currentStatusMessage = "No answer from ${contact.name}. Moving next..."
                 updateNotification(currentStatusMessage)
                 endCurrentCall()
-                delay(5000L)
+                delay(delayBetweenCallsSeconds * 1000L)
                 currentContactIndex++
                 processNextCall()
             }
@@ -119,7 +137,7 @@ class FajrCallService : Service() {
                     TelephonyManager.CALL_STATE_IDLE -> {
                         if (isCallInProgress.getAndSet(false)) {
                             serviceScope.launch {
-                                delay(4000L)
+                                delay(delayBetweenCallsSeconds * 1000L)
                                 currentContactIndex++
                                 processNextCall()
                             }
