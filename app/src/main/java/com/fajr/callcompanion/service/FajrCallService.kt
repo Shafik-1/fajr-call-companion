@@ -158,39 +158,47 @@ class FajrCallService : Service() {
     }
 
     private fun endCurrentCall() {
+        android.util.Log.d("FajrCall", ">>> endCurrentCall triggered <<<")
         isCallInProgress.set(false)
         activeJob?.cancel()
 
-        // Strategy 1: Native InCallService disconnect (Guaranteed on Android 10/MIUI)
+        // Strategy 1: Native InCallService disconnect
         if (FajrInCallService.disconnectActiveCall()) {
+            android.util.Log.d("FajrCall", "Strategy 1 (InCallService) SUCCESS!")
             return
+        } else {
+            android.util.Log.d("FajrCall", "Strategy 1 (InCallService) skipped or null call")
         }
 
-        // Strategy 2: TelecomManager (Android 9+)
+        // Strategy 2: TelecomManager
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
-                    telecomManager.endCall()
+                    val res = telecomManager.endCall()
+                    android.util.Log.d("FajrCall", "Strategy 2 (TelecomManager.endCall) result: $res")
+                } else {
+                    android.util.Log.d("FajrCall", "Strategy 2 missing ANSWER_PHONE_CALLS permission")
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("FajrCall", "Strategy 2 exception: ${e.message}")
         }
 
-        // Strategy 3: Reflection on ITelephony (Xiaomi / MIUI compatibility)
+        // Strategy 3: ITelephony Reflection
         try {
             val telephonyClass = Class.forName(telephonyManager.javaClass.name)
             val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
             methodGetITelephony.isAccessible = true
             val iTelephony = methodGetITelephony.invoke(telephonyManager)
             val methodEndCall = iTelephony.javaClass.getDeclaredMethod("endCall")
-            methodEndCall.invoke(iTelephony)
+            val res = methodEndCall.invoke(iTelephony)
+            android.util.Log.d("FajrCall", "Strategy 3 (ITelephony.endCall) result: $res")
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("FajrCall", "Strategy 3 exception: ${e.message}")
         }
 
-        // Strategy 4: Broadcast disconnect intent for headset hooks
+        // Strategy 4: Media Key Broadcast
         try {
             val mediaKeyIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
             mediaKeyIntent.putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
@@ -198,8 +206,9 @@ class FajrCallService : Service() {
             val mediaKeyUpIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
             mediaKeyUpIntent.putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
             sendOrderedBroadcast(mediaKeyUpIntent, null)
+            android.util.Log.d("FajrCall", "Strategy 4 (MediaKey broadcast) sent")
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("FajrCall", "Strategy 4 exception: ${e.message}")
         }
     }
 
