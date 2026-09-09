@@ -21,6 +21,7 @@ class FajrCallService : Service() {
     private var isStoppedByUser = false
     private var ringDurationSeconds = 25
     private var delayBetweenCallsSeconds = 5
+    private var activeJob: Job? = null
 
     private lateinit var telephonyManager: TelephonyManager
     private var phoneStateListener: PhoneStateListener? = null
@@ -29,13 +30,20 @@ class FajrCallService : Service() {
         const val CHANNEL_ID = "FajrCallServiceChannel"
         const val ACTION_START = "ACTION_START_CALLS"
         const val ACTION_STOP = "ACTION_STOP_CALLS"
+        const val ACTION_RESTART_INDEX = "ACTION_RESTART_INDEX"
         const val EXTRA_NAMES = "EXTRA_NAMES"
         const val EXTRA_NUMBERS = "EXTRA_NUMBERS"
         const val EXTRA_RING_DURATION = "EXTRA_RING_DURATION"
         const val EXTRA_DELAY_BETWEEN = "EXTRA_DELAY_BETWEEN"
+        const val EXTRA_START_INDEX = "EXTRA_START_INDEX"
+
+        const val PREFS_NAME = "fajr_service_prefs"
+        const val KEY_LAST_INDEX = "last_stopped_index"
 
         var isRunning = false
         var currentStatusMessage = "Idle"
+        var currentActiveIndex = 0
+        var onStatusUpdated: ((String, Int) -> Unit)? = null
     }
 
     override fun onCreate() {
@@ -52,6 +60,7 @@ class FajrCallService : Service() {
                 val numbers = intent.getStringArrayExtra(EXTRA_NUMBERS) ?: emptyArray()
                 ringDurationSeconds = intent.getIntExtra(EXTRA_RING_DURATION, 25)
                 delayBetweenCallsSeconds = intent.getIntExtra(EXTRA_DELAY_BETWEEN, 5)
+                val startIndex = intent.getIntExtra(EXTRA_START_INDEX, 0)
 
                 contactsQueue.clear()
                 for (i in names.indices) {
@@ -61,6 +70,7 @@ class FajrCallService : Service() {
                 }
 
                 if (contactsQueue.isEmpty()) {
+                    updateStatus("No contacts selected to call!", 0)
                     stopCallingSequence("No contacts selected to call!")
                     return START_NOT_STICKY
                 }
@@ -69,11 +79,12 @@ class FajrCallService : Service() {
                 startForeground(1001, notification)
                 isRunning = true
                 isStoppedByUser = false
-                currentContactIndex = 0
+                currentContactIndex = if (startIndex < contactsQueue.size) startIndex else 0
                 processNextCall()
             }
             ACTION_STOP -> {
-                stopCallingSequence("Stopped by grandfather")
+                endCurrentCall()
+                stopCallingSequence("Stopped by user at contact #${currentContactIndex + 1}")
             }
         }
         return START_NOT_STICKY
@@ -83,25 +94,33 @@ class FajrCallService : Service() {
         if (isStoppedByUser) return
 
         if (currentContactIndex >= contactsQueue.size) {
+            saveLastStoppedIndex(0)
+            updateStatus("All Fajr calls completed!", 0)
             stopCallingSequence("All Fajr calls completed!")
             return
         }
 
+        saveLastStoppedIndex(currentContactIndex)
         val contact = contactsQueue[currentContactIndex]
-        currentStatusMessage = "Calling ${contact.name} (${currentContactIndex + 1}/${contactsQueue.size})..."
-        updateNotification(currentStatusMessage)
+        val statusText = "Calling ${contact.name} (${currentContactIndex + 1}/${contactsQueue.size})..."
+        updateStatus(statusText, currentContactIndex)
+        updateNotification(statusText)
 
         makeSimCall(contact.phoneNumber)
 
-        serviceScope.launch {
+        activeJob?.cancel()
+        activeJob = serviceScope.launch {
             delay(ringDurationSeconds * 1000L)
-            if (isCallInProgress.get()) {
-                currentStatusMessage = "No answer from ${contact.name}. Moving next..."
-                updateNotification(currentStatusMessage)
+            if (isCallInProgress.get() && !isStoppedByUser) {
+                val noAnsText = "No answer from ${contact.name}. Moving next..."
+                updateStatus(noAnsText, currentContactIndex)
+                updateNotification(noAnsText)
                 endCurrentCall()
                 delay(delayBetweenCallsSeconds * 1000L)
-                currentContactIndex++
-                processNextCall()
+                if (!isStoppedByUser) {
+                    currentContactIndex++
+                    processNextCall()
+                }
             }
         }
     }
@@ -109,23 +128,26 @@ class FajrCallService : Service() {
     private fun makeSimCall(phoneNumber: String) {
         try {
             isCallInProgress.set(true)
+            val formattedNumber = phoneNumber.replace(" ", "").replace("-", "")
             val callIntent = Intent(Intent.ACTION_CALL).apply {
-                data = Uri.parse("tel:$phoneNumber")
+                data = Uri.parse("tel:$formattedNumber")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             startActivity(callIntent)
         } catch (e: SecurityException) {
+            updateStatus("Permission error making call", currentContactIndex)
             stopCallingSequence("Permission error making call")
         }
     }
 
     private fun endCurrentCall() {
         isCallInProgress.set(false)
+        activeJob?.cancel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
             try {
                 telecomManager.endCall()
-            } catch (e: SecurityException) {
+            } catch (e: Exception) {
             }
         }
     }
@@ -135,17 +157,23 @@ class FajrCallService : Service() {
             override fun onCallStateChanged(state: Int, phoneNumber: String?) {
                 when (state) {
                     TelephonyManager.CALL_STATE_IDLE -> {
-                        if (isCallInProgress.getAndSet(false)) {
-                            serviceScope.launch {
+                        if (isCallInProgress.getAndSet(false) && !isStoppedByUser) {
+                            activeJob?.cancel()
+                            activeJob = serviceScope.launch {
                                 delay(delayBetweenCallsSeconds * 1000L)
-                                currentContactIndex++
-                                processNextCall()
+                                if (!isStoppedByUser) {
+                                    currentContactIndex++
+                                    processNextCall()
+                                }
                             }
                         }
                     }
                     TelephonyManager.CALL_STATE_OFFHOOK -> {
-                        currentStatusMessage = "In call with ${contactsQueue.getOrNull(currentContactIndex)?.name ?: "Friend"}"
-                        updateNotification(currentStatusMessage)
+                        if (!isStoppedByUser) {
+                            val inCallText = "In call with ${contactsQueue.getOrNull(currentContactIndex)?.name ?: "Friend"}"
+                            updateStatus(inCallText, currentContactIndex)
+                            updateNotification(inCallText)
+                        }
                     }
                 }
             }
@@ -156,10 +184,23 @@ class FajrCallService : Service() {
     private fun stopCallingSequence(reason: String) {
         isStoppedByUser = true
         isRunning = false
-        currentStatusMessage = reason
+        isCallInProgress.set(false)
+        activeJob?.cancel()
+        updateStatus(reason, currentContactIndex)
         updateNotification(reason)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun updateStatus(message: String, index: Int) {
+        currentStatusMessage = message
+        currentActiveIndex = index
+        onStatusUpdated?.invoke(message, index)
+    }
+
+    private fun saveLastStoppedIndex(index: Int) {
+        val sp = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        sp.edit().putInt(KEY_LAST_INDEX, index).apply()
     }
 
     private fun createNotificationChannel() {

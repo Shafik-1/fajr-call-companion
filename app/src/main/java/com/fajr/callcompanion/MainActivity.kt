@@ -10,8 +10,11 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
@@ -25,7 +28,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fajr.callcompanion.model.ContactItem
 import com.fajr.callcompanion.service.FajrCallService
+import java.io.InputStream
+import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
 
@@ -45,7 +52,6 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            // Force light color palette so text is dark on light backgrounds regardless of System Dark Mode
             val customColorScheme = lightColorScheme(
                 primary = Color(0xFF0284C7),
                 onPrimary = Color.White,
@@ -61,8 +67,8 @@ class MainActivity : ComponentActivity() {
                     color = Color(0xFFF4F6F8)
                 ) {
                     AppNavigation(
-                        onStartCalls = { selectedList, ringTime, delayTime ->
-                            startFajrCalls(selectedList, ringTime, delayTime)
+                        onStartCalls = { selectedList, ringTime, delayTime, startIndex ->
+                            startFajrCalls(selectedList, ringTime, delayTime, startIndex)
                         },
                         onStopCalls = { stopFajrCalls() }
                     )
@@ -86,7 +92,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int) {
+    private fun startFajrCalls(contacts: List<ContactItem>, ringDuration: Int, delayBetween: Int, startIndex: Int) {
         val names = contacts.map { it.name }.toTypedArray()
         val numbers = contacts.map { it.phoneNumber }.toTypedArray()
 
@@ -96,6 +102,7 @@ class MainActivity : ComponentActivity() {
             putExtra(FajrCallService.EXTRA_NUMBERS, numbers)
             putExtra(FajrCallService.EXTRA_RING_DURATION, ringDuration)
             putExtra(FajrCallService.EXTRA_DELAY_BETWEEN, delayBetween)
+            putExtra(FajrCallService.EXTRA_START_INDEX, startIndex)
         }
         ContextCompat.startForegroundService(this, intent)
     }
@@ -113,24 +120,51 @@ enum class Screen { HOME, CONTACT_PICKER, SETTINGS }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(
-    onStartCalls: (List<ContactItem>, Int, Int) -> Unit,
+    onStartCalls: (List<ContactItem>, Int, Int, Int) -> Unit,
     onStopCalls: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("fajr_prefs", Context.MODE_PRIVATE) }
+    val servicePrefs = remember { context.getSharedPreferences(FajrCallService.PREFS_NAME, Context.MODE_PRIVATE) }
 
     var currentScreen by remember { mutableStateOf(Screen.HOME) }
     var selectedContacts by remember { mutableStateOf(loadSavedSelectedContacts(prefs)) }
     var ringDuration by remember { mutableIntStateOf(prefs.getInt("ring_duration", 25)) }
     var delayBetween by remember { mutableIntStateOf(prefs.getInt("delay_between", 5)) }
 
+    var statusMessage by remember { mutableStateOf(FajrCallService.currentStatusMessage) }
+    var activeIndex by remember { mutableIntStateOf(servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)) }
+
+    DisposableEffect(Unit) {
+        FajrCallService.onStatusUpdated = { msg, idx ->
+            statusMessage = msg
+            activeIndex = idx
+        }
+        onDispose {
+            FajrCallService.onStatusUpdated = null
+        }
+    }
+
     when (currentScreen) {
         Screen.HOME -> FajrHomeScreen(
             selectedCount = selectedContacts.size,
+            statusMessage = statusMessage,
+            stoppedIndex = activeIndex,
             onOpenContacts = { currentScreen = Screen.CONTACT_PICKER },
             onOpenSettings = { currentScreen = Screen.SETTINGS },
-            onStart = { onStartCalls(selectedContacts, ringDuration, delayBetween) },
-            onStop = onStopCalls
+            onStart = {
+                val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
+                onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex)
+            },
+            onRestart = {
+                servicePrefs.edit().putInt(FajrCallService.KEY_LAST_INDEX, 0).apply()
+                activeIndex = 0
+                onStartCalls(selectedContacts, ringDuration, delayBetween, 0)
+            },
+            onStop = {
+                onStopCalls()
+                statusMessage = "Stopped by user"
+            }
         )
 
         Screen.CONTACT_PICKER -> ContactPickerScreen(
@@ -146,12 +180,18 @@ fun AppNavigation(
         Screen.SETTINGS -> SettingsScreen(
             initialRingDuration = ringDuration,
             initialDelayBetween = delayBetween,
+            selectedContacts = selectedContacts,
             onBack = { currentScreen = Screen.HOME },
             onSaveSettings = { newRing, newDelay ->
                 ringDuration = newRing
                 delayBetween = newDelay
                 prefs.edit().putInt("ring_duration", newRing).putInt("delay_between", newDelay).apply()
                 currentScreen = Screen.HOME
+            },
+            onImportContacts = { importedList ->
+                selectedContacts = importedList
+                saveSelectedContacts(prefs, importedList)
+                Toast.makeText(context, "Imported ${importedList.size} contacts!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -160,9 +200,12 @@ fun AppNavigation(
 @Composable
 fun FajrHomeScreen(
     selectedCount: Int,
+    statusMessage: String,
+    stoppedIndex: Int,
     onOpenContacts: () -> Unit,
     onOpenSettings: () -> Unit,
     onStart: () -> Unit,
+    onRestart: () -> Unit,
     onStop: () -> Unit
 ) {
     Column(
@@ -173,7 +216,7 @@ fun FajrHomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Bar with Title and Settings Icon
+        // Top Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -219,11 +262,20 @@ fun FajrHomeScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = FajrCallService.currentStatusMessage,
+                    text = statusMessage,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A)
                 )
+                if (stoppedIndex > 0 && selectedCount > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Resume point: Contact #${stoppedIndex + 1}",
+                        fontSize = 14.sp,
+                        color = Color(0xFF0284C7),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
 
@@ -232,7 +284,7 @@ fun FajrHomeScreen(
             onClick = onOpenContacts,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp),
+                .height(75.dp),
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7), contentColor = Color.White)
         ) {
@@ -244,57 +296,79 @@ fun FajrHomeScreen(
                     imageVector = Icons.Default.List,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = "CHOOSE LIST",
-                        fontSize = 24.sp,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "$selectedCount friends selected",
-                        fontSize = 16.sp,
+                        text = "$selectedCount friends saved",
+                        fontSize = 15.sp,
                         color = Color.White.copy(alpha = 0.95f)
                     )
                 }
             }
         }
 
-        // GIANT START CALLS BUTTON
+        // START / RESUME BUTTON
         Button(
             onClick = onStart,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(110.dp),
-            shape = RoundedCornerShape(22.dp),
+                .height(95.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A), contentColor = Color.White)
         ) {
             Text(
-                text = "START FAJR CALLS",
-                fontSize = 26.sp,
+                text = if (stoppedIndex > 0) "RESUME CALLS (#${stoppedIndex + 1})" else "START FAJR CALLS",
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White
             )
         }
 
-        // GIANT STOP CALLS BUTTON
-        Button(
-            onClick = onStop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp),
-            shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626), contentColor = Color.White)
+        // RESTART LIST & STOP CALLS BUTTON ROW
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "STOP ALL CALLS",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            // RESTART FROM BEGINNING BUTTON
+            OutlinedButton(
+                onClick = onRestart,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(75.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Restart", modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Restart #1", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // STOP ALL CALLS BUTTON
+            Button(
+                onClick = onStop,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(75.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626), contentColor = Color.White)
+            ) {
+                Text(
+                    text = "STOP CALLS",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -346,7 +420,6 @@ fun ContactPickerScreen(
                 .background(Color(0xFFF4F6F8))
                 .padding(padding)
         ) {
-            // Mass Selection Control Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -430,11 +503,27 @@ fun ContactPickerScreen(
 fun SettingsScreen(
     initialRingDuration: Int,
     initialDelayBetween: Int,
+    selectedContacts: List<ContactItem>,
     onBack: () -> Unit,
-    onSaveSettings: (Int, Int) -> Unit
+    onSaveSettings: (Int, Int) -> Unit,
+    onImportContacts: (List<ContactItem>) -> Unit
 ) {
+    val context = LocalContext.current
     var ringDuration by remember { mutableIntStateOf(initialRingDuration) }
     var delayBetween by remember { mutableIntStateOf(initialDelayBetween) }
+
+    // Export Launcher
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        uri?.let { exportContactsToCsv(context, it, selectedContacts) }
+    }
+
+    // Import Launcher
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            val list = importContactsFromCsv(context, it)
+            if (list.isNotEmpty()) onImportContacts(list)
+        }
+    }
 
     Scaffold(
         containerColor = Color(0xFFF4F6F8),
@@ -466,7 +555,7 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 10.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
@@ -498,7 +587,7 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 10.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
@@ -525,8 +614,81 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            // Import & Export Backup Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "Backup & Share Contact List",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { exportLauncher.launch("fajr_contacts_backup.csv") },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export CSV")
+                        }
+                        OutlinedButton(
+                            onClick = { importLauncher.launch(arrayOf("*/*")) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.List, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Import CSV")
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+fun exportContactsToCsv(context: Context, uri: Uri, contacts: List<ContactItem>) {
+    try {
+        val outputStream: OutputStream? = context.contentResolver.openOutputStream(uri)
+        outputStream?.bufferedWriter()?.use { writer ->
+            writer.write("Name,PhoneNumber\n")
+            for (c in contacts) {
+                writer.write("\"${c.name}\",\"${c.phoneNumber}\"\n")
+            }
+        }
+        Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun importContactsFromCsv(context: Context, uri: Uri): List<ContactItem> {
+    val list = mutableListOf<ContactItem>()
+    try {
+        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+        inputStream?.bufferedReader()?.useLines { lines ->
+            lines.drop(1).forEach { line ->
+                val parts = line.replace("\"", "").split(",")
+                if (parts.size >= 2) {
+                    list.add(ContactItem(id = parts[1], name = parts[0], phoneNumber = parts[1], isSelected = true))
+                }
+            }
+        }
+    } catch (e: Exception) {
+        Toast.makeText(context, "Import error: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+    return list
 }
 
 fun fetchPhoneContacts(context: Context): List<ContactItem> {
