@@ -160,18 +160,20 @@ class FajrCallService : Service() {
     private fun endCurrentCall() {
         isCallInProgress.set(false)
         activeJob?.cancel()
+
+        // Strategy 1: TelecomManager (Android 9+)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val telecomManager = getSystemService(Context.TELECOM_SERVICE) as android.telecom.TelecomManager
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {
                     telecomManager.endCall()
-                    return
                 }
             }
         } catch (e: Exception) {
-            // Fallback for custom ROMs / MIUI
+            e.printStackTrace()
         }
 
+        // Strategy 2: Reflection on ITelephony (Xiaomi / MIUI compatibility)
         try {
             val telephonyClass = Class.forName(telephonyManager.javaClass.name)
             val methodGetITelephony = telephonyClass.getDeclaredMethod("getITelephony")
@@ -180,7 +182,19 @@ class FajrCallService : Service() {
             val methodEndCall = iTelephony.javaClass.getDeclaredMethod("endCall")
             methodEndCall.invoke(iTelephony)
         } catch (e: Exception) {
-            // Log fallback fail
+            e.printStackTrace()
+        }
+
+        // Strategy 3: Broadcast disconnect intent for custom call screens
+        try {
+            val mediaKeyIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
+            mediaKeyIntent.putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
+            sendOrderedBroadcast(mediaKeyIntent, null)
+            val mediaKeyUpIntent = Intent(Intent.ACTION_MEDIA_BUTTON)
+            mediaKeyUpIntent.putExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_HEADSETHOOK))
+            sendOrderedBroadcast(mediaKeyUpIntent, null)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
