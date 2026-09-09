@@ -23,7 +23,7 @@ import com.fajr.callcompanion.service.FajrCallService
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate()
+        super.onCreate(savedInstanceState)
         checkAndRequestPermissions()
 
         setContent {
