@@ -7,8 +7,9 @@ An automated, senior-friendly Android application built with Kotlin and Jetpack 
 ## 📱 Features
 
 1. **Senior-Accessible UI (High Contrast)**:
-   - Giant high-visibility action buttons (**START FAJR CALLS**, **RESUME CALLS**, **STOP CALLS**).
-   - Live status card showing remaining cooldown seconds and who is being called next.
+   - Giant high-visibility action buttons (**START FAJR CALLS**, **RESUME CALLS**, **RESTART #1**, **STOP CALLS**).
+   - Live status card showing remaining countdown seconds and who is being called next.
+   - High-contrast floating system overlay window over other apps for emergency stop control.
 
 2. **Full Bilingual Localization (English & العربية)**:
    - Persistent language selection toggle (**English** / **العربية**) in Settings.
@@ -17,12 +18,14 @@ An automated, senior-friendly Android application built with Kotlin and Jetpack 
 
 3. **Autonomous Call Automation Engine**:
    - Dials contacts sequentially on the phone's native SIM card.
+   - Dual-SIM support with slot configuration (`selectedSimSlot` 0 / 1).
    - Monitors call state (`IDLE`, `OFFHOOK`, `RINGING`).
    - Automatically hangs up after a configurable ring duration (e.g. 25s) if unanswered.
    - Pauses for a configurable cooldown delay (e.g. 5s) before dialing the next friend.
    - Preserves state: allows resuming from the last stopped index or restarting from contact #1.
 
 4. **Active Queue Incoming Call Interceptor**:
+   - Configurable interceptor toggle (`enableInterceptor`).
    - Monitors incoming calls while the Fajr queue sequence is active.
    - Checks if the caller is in the active Fajr contact list.
    - **Action**: Instantly declines the call (`call.reject()` / `call.disconnect()`).
@@ -42,7 +45,7 @@ An automated, senior-friendly Android application built with Kotlin and Jetpack 
 - **UI Framework**: Jetpack Compose (Material3 Design System)
 - **Background Engine**: Android Foreground Service (`FajrCallService`)
 - **Call Screening & Control**: Android Telecom Companion Service (`InCallService`, `RoleManager.ROLE_CALL_COMPANION`)
-- **Persistence**: Android `SharedPreferences`
+- **Persistence**: Android `SharedPreferences` (`fajr_prefs`, `fajr_service_prefs`)
 - **CI/CD Pipeline**: GitHub Actions (`build.yml`) compiled via Gradle 8.4 & JDK 17
 
 ---
@@ -50,28 +53,25 @@ An automated, senior-friendly Android application built with Kotlin and Jetpack 
 ## ⚙️ Core Logic & Key Methods
 
 ### 1. Main Navigation & Preferences (`MainActivity.kt`)
-- `AppNavigation()`: Manages screen switching (`HOME`, `CONTACT_PICKER`, `SETTINGS`) and language state (`EN` / `AR`).
-- `FajrHomeScreen()`: Displays big high-contrast controls and real-time call queue progress.
-- `SettingsScreen()`: Configures ring duration, cooldown delay, language toggle, and CSV backup import/export.
+- `AppNavigation(onStartCalls: (List<ContactItem>, Int, Int, Int, Int, Boolean) -> Unit, onStopCalls: () -> Unit)`: Manages screen switching (`HOME`, `CONTACT_PICKER`, `SETTINGS`) and language state (`EN` / `AR`).
+- `startFajrCalls(contacts, ringDuration, delayBetween, startIndex, simSlot, enableInterceptor)`: Prepares service intent and launches `FajrCallService` as a foreground service.
+- `FajrHomeScreen(...)`: Displays big high-contrast controls, real-time call queue progress, and action callbacks (`onStart`, `onRestart`, `onStop`).
+- `SettingsScreen(...)`: Configures ring duration, cooldown delay, dual-SIM slot selection, incoming call interceptor toggle, language selection, and CSV backup import/export.
 
 ### 2. Autonomous Service Engine (`FajrCallService.kt`)
-- `startCallingSequence()`: Initializes `contactsQueue`, resets/loads indices, acquires `WakeLock`, and starts foreground notification.
+- `onStartCommand(intent, flags, startId)`: Receives parameters (`EXTRA_RING_DURATION`, `EXTRA_DELAY_BETWEEN`, `EXTRA_START_INDEX`, `EXTRA_SIM_SLOT`, `EXTRA_ENABLE_INTERCEPTOR`), initializes queue, and starts foreground notification.
 - `processNextCall()`: Evaluates queue index and initiates `makeSimCall(phoneNumber)`.
-- `makeSimCall(phoneNumber)`: Launches native SIM dialer `Intent.ACTION_CALL` with dual-SIM bypass flags (`simSlot`, `com.android.phone.extra.slot`).
+- `makeSimCall(phoneNumber)`: Launches native SIM dialer `Intent.ACTION_CALL` with dual-SIM bypass flags (`simSlot`, `com.android.phone.extra.slot`, `subscription`).
 - `endCurrentCall()`: Triggers multi-strategy auto-hangup:
   - **Strategy 1**: Native `InCallService.disconnectActiveCall()` via Telecom Companion binding.
   - **Strategy 2**: `TelecomManager.endCall()` (Android 9+).
   - **Strategy 3**: Reflection on `ITelephony.endCall()`.
   - **Strategy 4**: Media key broadcast (`KEYCODE_HEADSETHOOK`).
-- `handleIncomingQueueContact(phoneNumber)`:
-  - Compares incoming caller against `contactsQueue`.
-  - Re-orders queue dynamically if caller is uncalled (`queue.add(currentContactIndex + 1, caller)`).
 
 ### 3. Native InCall Companion Interceptor (`FajrInCallService.kt`)
 - `onCallAdded(call)`: Binds active Android Telecom call objects.
 - `onCallRemoved(call)`: Clears call object references.
 - `disconnectActiveCall()`: Invokes native `call.disconnect()` on active calls.
-- **Incoming Interceptor Hook**: Rejects incoming calls matching active Fajr contacts via `call.reject(false, null)`.
 
 ---
 

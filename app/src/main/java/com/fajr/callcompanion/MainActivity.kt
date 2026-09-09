@@ -71,8 +71,8 @@ class MainActivity : ComponentActivity() {
                     color = Color(0xFFF4F6F8)
                 ) {
                     AppNavigation(
-                        onStartCalls = { selectedList, ringTime, delayTime, startIndex ->
-                            startFajrCalls(selectedList, ringTime, delayTime, startIndex)
+                        onStartCalls = { selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor ->
+                            startFajrCalls(selectedList, ringTime, delayTime, startIndex, simSlot, enableInterceptor)
                         },
                         onStopCalls = { stopFajrCalls() }
                     )
@@ -184,7 +184,7 @@ fun AppNavigation(
                 val savedIndex = servicePrefs.getInt(FajrCallService.KEY_LAST_INDEX, 0)
                 onStartCalls(selectedContacts, ringDuration, delayBetween, savedIndex, selectedSimSlot, enableInterceptor)
             },
-            onRestartQueue = {
+            onRestart = {
                 servicePrefs.edit().putInt(FajrCallService.KEY_LAST_INDEX, 0).apply()
                 activeIndex = 0
                 val msg = if (currentLanguage == AppLanguage.AR) "تم إعادة تعيين القائمة إلى البداية!" else "Queue reset to beginning!"
