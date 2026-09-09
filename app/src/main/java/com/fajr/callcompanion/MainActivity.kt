@@ -32,7 +32,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -143,7 +147,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Screen { HOME, CONTACT_PICKER, SETTINGS }
+enum class Screen { HOME, QUEUE_MANAGEMENT, CONTACT_PICKER, SETTINGS }
 enum class AppLanguage { EN, AR }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -192,6 +196,7 @@ fun AppNavigation(
             isPausePhase = isPause,
             lang = currentLanguage,
             onOpenContacts = { currentScreen = Screen.CONTACT_PICKER },
+            onOpenQueue = { currentScreen = Screen.QUEUE_MANAGEMENT },
             onOpenSettings = { currentScreen = Screen.SETTINGS },
             onStart = {
                 if (selectedContacts.isEmpty()) {
@@ -212,6 +217,18 @@ fun AppNavigation(
                 onStopCalls()
                 statusMessage = if (currentLanguage == AppLanguage.AR) "تم الإيقاف بواسطة المستخدم" else "Stopped by user"
                 remainingSec = 0
+            }
+        )
+
+        Screen.QUEUE_MANAGEMENT -> QueueManagementScreen(
+            contactsQueue = selectedContacts,
+            activeIndex = activeIndex,
+            isRunning = FajrCallService.isRunning,
+            lang = currentLanguage,
+            onBack = { currentScreen = Screen.HOME },
+            onReorder = { newOrder ->
+                selectedContacts = newOrder
+                saveSelectedContacts(prefs, newOrder)
             }
         )
 
@@ -268,6 +285,7 @@ fun FajrHomeScreen(
     isPausePhase: Boolean,
     lang: AppLanguage,
     onOpenContacts: () -> Unit,
+    onOpenQueue: () -> Unit,
     onOpenSettings: () -> Unit,
     onStart: () -> Unit,
     onRestart: () -> Unit,
@@ -387,38 +405,75 @@ fun FajrHomeScreen(
             }
         }
 
-        // CHOOSE LIST BUTTON
-        Button(
-            onClick = onOpenContacts,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(65.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7), contentColor = Color.White)
+        // CHOOSE LIST & VIEW QUEUE ROW
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Button(
+                onClick = onOpenContacts,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(65.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7), contentColor = Color.White)
             ) {
-                Icon(
-                    imageVector = Icons.Default.List,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = if (isAr) "اختر القائمة" else "CHOOSE LIST",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.List,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
-                    Text(
-                        text = if (isAr) "تم حفظ $selectedCount من الأصدقاء" else "$selectedCount friends saved",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.95f)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column {
+                        Text(
+                            text = if (isAr) "اختر القائمة" else "CHOOSE LIST",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = if (isAr) "$selectedCount أصدقاء" else "$selectedCount friends",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.95f)
+                        )
+                    }
+                }
+            }
+
+            OutlinedButton(
+                onClick = onOpenQueue,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(65.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FormatListNumbered,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column {
+                        Text(
+                            text = if (isAr) "ترتيب القائمة" else "VIEW QUEUE",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isAr) "تعديل الدور" else "Reorder queue",
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -977,6 +1032,232 @@ fun SettingsScreen(
                             Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Import CSV", fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QueueManagementScreen(
+    contactsQueue: List<ContactItem>,
+    activeIndex: Int,
+    isRunning: Boolean,
+    lang: AppLanguage,
+    onBack: () -> Unit,
+    onReorder: (List<ContactItem>) -> Unit
+) {
+    val isAr = lang == AppLanguage.AR
+    var currentQueue by remember(contactsQueue) { mutableStateOf(contactsQueue) }
+
+    Scaffold(
+        containerColor = Color(0xFFF4F6F8),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        if (isAr) "ترتيب قائمة الاتصال (${currentQueue.size})"
+                        else "Call Queue Order (${currentQueue.size})",
+                        color = Color(0xFF0F172A),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        if (currentQueue.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isAr) "القائمة فارغة! يرجى اختيار الأصدقاء أولاً" else "Queue is empty! Please choose friends first.",
+                    fontSize = 16.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(currentQueue) { index, contact ->
+                    val isDone = isRunning && index < activeIndex
+                    val isActive = isRunning && index == activeIndex
+
+                    val cardBg = when {
+                        isDone -> Color(0xFFF1F5F9)
+                        isActive -> Color(0xFFE0F2FE)
+                        else -> Color.White
+                    }
+                    val textColor = if (isDone) Color(0xFF94A3B8) else Color(0xFF0F172A)
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        elevation = CardDefaults.cardElevation(defaultElevation = if (isDone) 1.dp else 3.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = when {
+                                        isDone -> Color(0xFFCBD5E1)
+                                        isActive -> Color(0xFF0284C7)
+                                        else -> Color(0xFF0284C7).copy(alpha = 0.15f)
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "#${index + 1}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDone || isActive) Color.White else Color(0xFF0284C7)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column {
+                                    Text(
+                                        text = contact.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor,
+                                        style = if (isDone) androidx.compose.ui.text.TextStyle(textDecoration = TextDecoration.LineThrough) else androidx.compose.ui.text.TextStyle.Default
+                                    )
+                                    Text(
+                                        text = contact.phoneNumber,
+                                        fontSize = 13.sp,
+                                        color = if (isDone) Color(0xFFCBD5E1) else Color(0xFF64748B)
+                                    )
+                                }
+                            }
+
+                            if (isDone) {
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = Color(0xFFDCFCE7),
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Done",
+                                            tint = Color(0xFF16A34A),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isAr) "تم" else "DONE",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF16A34A)
+                                        )
+                                    }
+                                }
+                            } else if (isActive) {
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = Color(0xFFBAE6FD),
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAr) "جاري الاتصال" else "CALLING",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0369A1),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            } else {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val canMoveUp = index > (if (isRunning) activeIndex + 1 else 0)
+                                    IconButton(
+                                        onClick = {
+                                            if (canMoveUp) {
+                                                val newList = currentQueue.toMutableList()
+                                                val item = newList.removeAt(index)
+                                                newList.add(index - 1, item)
+                                                currentQueue = newList
+                                                onReorder(newList)
+                                            }
+                                        },
+                                        enabled = canMoveUp,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(
+                                                if (canMoveUp) Color(0xFFE2E8F0) else Color(0xFFF1F5F9),
+                                                CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.ArrowUpward,
+                                            contentDescription = "Move Up",
+                                            tint = if (canMoveUp) Color(0xFF0F172A) else Color(0xFFCBD5E1),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+
+                                    val canMoveDown = index < currentQueue.size - 1
+                                    IconButton(
+                                        onClick = {
+                                            if (canMoveDown) {
+                                                val newList = currentQueue.toMutableList()
+                                                val item = newList.removeAt(index)
+                                                newList.add(index + 1, item)
+                                                currentQueue = newList
+                                                onReorder(newList)
+                                            }
+                                        },
+                                        enabled = canMoveDown,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(
+                                                if (canMoveDown) Color(0xFFE2E8F0) else Color(0xFFF1F5F9),
+                                                CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.ArrowDownward,
+                                            contentDescription = "Move Down",
+                                            tint = if (canMoveDown) Color(0xFF0F172A) else Color(0xFFCBD5E1),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
